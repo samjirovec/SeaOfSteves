@@ -1,0 +1,4 @@
+name: SeaOfSteves
+version: 1.0
+main: io.github.samjirovec.SeaOfSteves.SeaOfSteves
+api-version: 1.16
