@@ -11,7 +11,7 @@ public class SeaOfSteves extends JavaPlugin {
         getLogger().info("Registering Event Listeners");
 
         // Begin Registering Commands
-        getLogger().info("Registering Commands");;
+        getLogger().info("Registering Commands");
 
         //Loaded Successfully
         logPluginLoaded();

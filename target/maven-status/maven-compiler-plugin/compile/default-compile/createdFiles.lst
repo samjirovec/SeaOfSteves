@@ -1,2 +1,5 @@
-io\github\samjirovec\SeaOfSteves\SeaOfSteves.class
+io\github\samjirovec\SeaOfSteves\Model\Emissary.class
+io\github\samjirovec\SeaOfSteves\Model\SeaOfStevesPlayer.class
 io\github\samjirovec\SeaOfSteves\Utils\Logging.class
+io\github\samjirovec\SeaOfSteves\Model\PlayerMeta.class
+io\github\samjirovec\SeaOfSteves\SeaOfSteves.class
