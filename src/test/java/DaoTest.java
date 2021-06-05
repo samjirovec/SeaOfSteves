@@ -1,3 +1,4 @@
+import io.github.samjirovec.SeaOfSteves.Model.Emissary;
 import io.github.samjirovec.SeaOfSteves.Model.PlayerMeta;
 import io.github.samjirovec.SeaOfSteves.Model.SeaOfStevesPlayer;
 import io.github.samjirovec.SeaOfSteves.Utils.Dao;
@@ -19,7 +20,7 @@ public class DaoTest {
   @Test
   void save() {
     Map<String, SeaOfStevesPlayer> foo = new HashMap<>();
-    SeaOfStevesPlayer player = SeaOfStevesPlayer.builder().playerMeta(new PlayerMeta(100)).build();
+    SeaOfStevesPlayer player = SeaOfStevesPlayer.builder().playerMeta(new PlayerMeta(Emissary.GOLD_HOARDERS, 0)).build();
     foo.put("ASDF", player);
     dao.saveMap(foo);
   }
