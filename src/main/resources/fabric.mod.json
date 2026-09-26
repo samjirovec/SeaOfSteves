@@ -1,0 +1,23 @@
+{
+	"schemaVersion": 1,
+	"id": "seaofsteves",
+	"version": "${version}",
+	"name": "Sea of Steves",
+	"description": "Build ships block-by-block on open water. Add a Sail and a Ship's Wheel to turn them into sailable vessels driven by local wind currents.",
+	"authors": ["samjirovec"],
+	"contact": {
+		"sources": "https://github.com/samjirovec/SeaOfSteves"
+	},
+	"license": "MIT",
+	"environment": "*",
+	"entrypoints": {
+		"main": ["io.github.samjirovec.seaofsteves.SeaOfSteves"],
+		"client": ["io.github.samjirovec.seaofsteves.client.SeaOfStevesClient"]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}
