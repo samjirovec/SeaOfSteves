@@ -11,7 +11,7 @@ import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.core.BlockPos;
-import net.minecraft.util.Mth;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.phys.Vec3;
 
@@ -20,6 +20,12 @@ public class ShipRenderer extends EntityRenderer<ShipEntity, ShipRenderState> {
 	public ShipRenderer(EntityRendererProvider.Context context) {
 		super(context);
 		this.shadowRadius = 0f;
+	}
+
+	/** The entity's own box is only the wheel; cull against the whole hull instead. */
+	@Override
+	protected AABB getBoundingBoxForCulling(ShipEntity ship, float partialTick) {
+		return ship.getHullBounds().inflate(1.0);
 	}
 
 	@Override
@@ -31,7 +37,10 @@ public class ShipRenderer extends EntityRenderer<ShipEntity, ShipRenderState> {
 	public void extractRenderState(ShipEntity ship, ShipRenderState state, float partialTick) {
 		super.extractRenderState(ship, state, partialTick);
 		state.relativeYaw = ship.getRelativeYaw(partialTick);
-		state.bob = Mth.sin((ship.tickCount + partialTick) * 0.07f) * 0.04f;
+		state.pitch = ship.getPitch(partialTick);
+		state.roll = ship.getRoll(partialTick);
+		state.pivotY = ship.getWaterlineOffset();
+		state.baseYaw = ship.getStructure().baseYaw();
 		state.count = 0;
 
 		if (!(ship.level() instanceof ClientLevel level)) return;
@@ -57,8 +66,18 @@ public class ShipRenderer extends EntityRenderer<ShipEntity, ShipRenderState> {
 	@Override
 	public void submit(ShipRenderState state, PoseStack poseStack, SubmitNodeCollector collector, CameraRenderState camera) {
 		poseStack.pushPose();
-		poseStack.translate(0, state.bob, 0);
 		poseStack.mulPose(new Matrix4f().rotationY((float) Math.toRadians(-state.relativeYaw)));
+
+		// Rock on the waves around the waterline. In ship space the bow points along the heading
+		// the ship was built with; pitch turns about the beam, roll about the keel.
+		double b = Math.toRadians(state.baseYaw);
+		float fx = (float) -Math.sin(b), fz = (float) Math.cos(b);   // bow
+		float sx = -fz, sz = fx;                                     // starboard
+		poseStack.translate(0, state.pivotY, 0);
+		poseStack.mulPose(new Matrix4f()
+				.rotate((float) Math.toRadians(state.pitch), sx, 0, sz)
+				.rotate((float) Math.toRadians(state.roll), fx, 0, fz));
+		poseStack.translate(0, -state.pivotY, 0);
 		for (int i = 0; i < state.count; i++) {
 			BlockPos rel = state.offsets.get(i);
 			poseStack.pushPose();

@@ -9,7 +9,10 @@ import net.minecraft.core.BlockPos;
 
 public class ShipRenderState extends EntityRenderState {
 	public float relativeYaw;
-	public float bob;
+	public float pitch;
+	public float roll;
+	public float pivotY;
+	public float baseYaw;
 	public int count;
 	public final List<BlockPos> offsets = new ArrayList<>();
 	public final List<MovingBlockRenderState> blocks = new ArrayList<>();

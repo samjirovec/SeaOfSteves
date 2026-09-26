@@ -26,5 +26,8 @@
 		"java": ">=25",
 		"fabric-api": "*"
 	},
-	"icon": "assets/seaofsteves/icon.png"
+	"icon": "assets/seaofsteves/icon.png",
+	"mixins": [
+		"seaofsteves.mixins.json"
+	]
 }

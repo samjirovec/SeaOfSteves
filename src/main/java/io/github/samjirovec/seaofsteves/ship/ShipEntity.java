@@ -6,6 +6,7 @@ import java.util.List;
 import io.github.samjirovec.seaofsteves.block.ShipWheelBlock;
 import io.github.samjirovec.seaofsteves.physics.SailPhysics;
 import io.github.samjirovec.seaofsteves.physics.ShipStats;
+import io.github.samjirovec.seaofsteves.physics.WaveField;
 import io.github.samjirovec.seaofsteves.physics.WindField;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -40,7 +41,11 @@ import net.minecraft.world.phys.Vec3;
 /**
  * A sailing ship: a set of blocks lifted out of the world that moves as one entity.
  *
- * <p>The server simulates the ship; clients only render it and show the HUD from the synced data.
+ * <p>The server simulates the ship; clients render it and show the HUD from the synced data.
+ * The ship's blocks are solid (see {@link ShipCollisions}), so players and mobs can walk its
+ * decks while it sails; anything standing on it is carried along. The captain rides at the
+ * wheel. The entity's own bounding box is just the wheel, which is what you right-click to take
+ * the helm.
  */
 public class ShipEntity extends Entity {
 	private static final EntityDataAccessor<ShipStructure> DATA_STRUCTURE = SynchedEntityData.defineId(ShipEntity.class, ShipStructure.SERIALIZER);
@@ -50,19 +55,34 @@ public class ShipEntity extends Entity {
 	private static final EntityDataAccessor<Float> DATA_WIND_STRENGTH = SynchedEntityData.defineId(ShipEntity.class, EntityDataSerializers.FLOAT);
 	private static final EntityDataAccessor<Float> DATA_SPEED = SynchedEntityData.defineId(ShipEntity.class, EntityDataSerializers.FLOAT);
 	private static final EntityDataAccessor<Boolean> DATA_AGROUND = SynchedEntityData.defineId(ShipEntity.class, EntityDataSerializers.BOOLEAN);
+	private static final EntityDataAccessor<Float> DATA_PITCH = SynchedEntityData.defineId(ShipEntity.class, EntityDataSerializers.FLOAT);
+	private static final EntityDataAccessor<Float> DATA_ROLL = SynchedEntityData.defineId(ShipEntity.class, EntityDataSerializers.FLOAT);
 
 	private static final float SAIL_RATE = 0.02f;
 	private static final float TRIM_RATE = 2.5f;
-	private static final int MAX_PASSENGERS = 8;
+	/** Visual pitch/roll limit. Collision stays level, so keep this small enough to walk on. */
+	private static final float MAX_TILT = 4f;
 
 	private ShipStats stats = ShipStats.EMPTY;
+	private ShipHull hull = new ShipHull(ShipStructure.EMPTY);
 	private List<BlockPos> hullBottom = List.of();
 	private List<BlockPos> seats = List.of();
 	private double radius = 0.5;
-	private int height = 1;
+	private double halfLength = 0.5, halfBeam = 0.5;
 
 	private int trimInput;
 	private float lastYaw;
+
+	/** Resting height of the pivot on calm water; waves move the ship above and below it. */
+	private double baseY = Double.NaN;
+	private double heave, heaveVel, pitch, pitchVel, roll, rollVel;
+	private float prevPitch, prevRoll;
+
+	// How the ship moved during the last tick, used to carry whatever stands on it.
+	private Vec3 tickFromPos;
+	private float tickFromYaw;
+	private List<AABB> tickFromBoxes = List.of();
+	private long tickMotionTime = Long.MIN_VALUE;
 
 	public ShipEntity(EntityType<? extends ShipEntity> type, Level level) {
 		super(type, level);
@@ -78,10 +98,12 @@ public class ShipEntity extends Entity {
 		builder.define(DATA_WIND_STRENGTH, 0f);
 		builder.define(DATA_SPEED, 0f);
 		builder.define(DATA_AGROUND, false);
+		builder.define(DATA_PITCH, 0f);
+		builder.define(DATA_ROLL, 0f);
 	}
 
 	// ---------------------------------------------------------------------------------------------
-	// Structure
+	// Structure and hull
 
 	public ShipStructure getStructure() {
 		return entityData.get(DATA_STRUCTURE);
@@ -95,15 +117,28 @@ public class ShipEntity extends Entity {
 	private void onStructureChanged() {
 		ShipStructure structure = getStructure();
 		stats = structure.stats();
+		hull = new ShipHull(structure);
 		hullBottom = structure.hullBottom();
 		radius = Math.max(0.5, structure.horizontalRadius());
-		height = Math.max(1, structure.height());
 		BlockState helm = structure.blocks().stream()
 				.filter(b -> b.pos().equals(structure.helm()))
 				.map(ShipStructure.ShipBlock::state)
 				.findFirst().orElse(null);
 		Direction facing = helm != null && helm.hasProperty(ShipWheelBlock.FACING) ? helm.getValue(ShipWheelBlock.FACING) : Direction.SOUTH;
 		seats = structure.isEmpty() ? List.of() : structure.seats(facing);
+
+		// Length along the keel and width across it, for wave sampling.
+		double rad = Math.toRadians(structure.baseYaw());
+		double fx = -Math.sin(rad), fz = Math.cos(rad);
+		double maxAlong = 0.5, maxAcross = 0.5;
+		for (ShipStructure.ShipBlock b : structure.blocks()) {
+			double along = b.pos().getX() * fx + b.pos().getZ() * fz;
+			double across = b.pos().getX() * fz - b.pos().getZ() * fx;
+			maxAlong = Math.max(maxAlong, Math.abs(along) + 0.5);
+			maxAcross = Math.max(maxAcross, Math.abs(across) + 0.5);
+		}
+		halfLength = maxAlong;
+		halfBeam = maxAcross;
 		setBoundingBox(makeBoundingBox(position()));
 	}
 
@@ -122,22 +157,39 @@ public class ShipEntity extends Entity {
 		return getYRot(partialTick) - getStructure().baseYaw();
 	}
 
-	@Override
-	protected AABB makeBoundingBox(Vec3 pos) {
-		// Rotation-independent box that always contains the whole ship.
-		double r = radius;
-		return new AABB(pos.x - r, pos.y, pos.z - r, pos.x + r, pos.y + height, pos.z + r);
+	public List<AABB> getHullBoxes() {
+		return hull.worldBoxes(position(), getYRot() - getStructure().baseYaw());
 	}
 
-	/** World position of the centre of a block of the ship, for a given ship position and relative yaw. */
+	public AABB getHullBounds() {
+		return hull.worldBounds(position(), getYRot() - getStructure().baseYaw());
+	}
+
+	/** The entity's own box is just the ship's wheel: that's what players click to take the helm. */
+	@Override
+	protected AABB makeBoundingBox(Vec3 pos) {
+		ShipStructure structure = entityData == null ? ShipStructure.EMPTY : getStructure();
+		if (structure.isEmpty()) return super.makeBoundingBox(pos);
+		BlockPos h = structure.helm();
+		Vec3 c = localToWorld(pos, getYRot() - structure.baseYaw(), h.getX(), h.getY(), h.getZ());
+		return new AABB(c.x - 0.5, c.y, c.z - 0.5, c.x + 0.5, c.y + 1.0, c.z + 0.5);
+	}
+
+	/** World position of a point in ship space, for a given ship position and relative yaw. */
 	public static Vec3 localToWorld(Vec3 shipPos, double relYawDeg, double x, double y, double z) {
 		double rad = Math.toRadians(relYawDeg);
 		double cos = Math.cos(rad), sin = Math.sin(rad);
 		return new Vec3(shipPos.x + x * cos - z * sin, shipPos.y + y, shipPos.z + x * sin + z * cos);
 	}
 
+	private static Vec3 rotateY(Vec3 v, double deg) {
+		double rad = Math.toRadians(deg);
+		double cos = Math.cos(rad), sin = Math.sin(rad);
+		return new Vec3(v.x * cos - v.z * sin, v.y, v.x * sin + v.z * cos);
+	}
+
 	// ---------------------------------------------------------------------------------------------
-	// Synced state for the HUD
+	// Synced state for the HUD and renderer
 
 	public float getSailDeploy() {
 		return entityData.get(DATA_SAIL_DEPLOY);
@@ -164,6 +216,21 @@ public class ShipEntity extends Entity {
 		return entityData.get(DATA_AGROUND);
 	}
 
+	/** Bow-up rocking in degrees, interpolated for rendering. */
+	public float getPitch(float partialTick) {
+		return Mth.lerp(partialTick, prevPitch, entityData.get(DATA_PITCH));
+	}
+
+	/** Starboard-down rocking in degrees, interpolated for rendering. */
+	public float getRoll(float partialTick) {
+		return Mth.lerp(partialTick, prevRoll, entityData.get(DATA_ROLL));
+	}
+
+	/** Height of the waterline above the entity position, for the renderer's rocking pivot. */
+	public float getWaterlineOffset() {
+		return getStructure().waterline() + 1f;
+	}
+
 	/** Called from the network handler while the captain holds a trim key: -1 port, 0 hold, 1 starboard. */
 	public void setTrimInput(int direction) {
 		this.trimInput = Mth.clamp(direction, -1, 1);
@@ -179,16 +246,24 @@ public class ShipEntity extends Entity {
 	@Override
 	public void tick() {
 		lastYaw = getYRot();
+		Vec3 fromPos = position();
+		float fromYaw = getYRot();
+		List<AABB> fromBoxes = getHullBoxes();
+		ShipCollisions.track(this);
 		super.tick();
 
 		if (!(level() instanceof ServerLevel level)) {
+			prevPitch = entityData.get(DATA_PITCH);
+			prevRoll = entityData.get(DATA_ROLL);
 			interpolationHandler.interpolate();
+			recordMotion(fromPos, fromYaw, fromBoxes);
 			return;
 		}
 		if (getStructure().isEmpty()) {
 			discard();
 			return;
 		}
+		if (Double.isNaN(baseY)) baseY = getY();
 
 		Input input = getFirstPassenger() instanceof ServerPlayer captain ? captain.getLastClientInput() : Input.EMPTY;
 		if (getPassengers().isEmpty()) trimInput = 0;
@@ -216,15 +291,16 @@ public class ShipEntity extends Entity {
 		float rudder = (input.right() ? 1f : 0f) - (input.left() ? 1f : 0f);
 		float newYaw = getYRot() + rudder * (float) SailPhysics.turnRate(stats, speed);
 
+		updateWaves(level, wind, windRel, deploy);
+
 		double rad = Math.toRadians(newYaw);
-		Vec3 motion = new Vec3(-Math.sin(rad) * speed, 0, Math.cos(rad) * speed);
-		Vec3 target = position().add(motion);
+		Vec3 target = new Vec3(getX() - Math.sin(rad) * speed, baseY + heave, getZ() + Math.cos(rad) * speed);
 
 		boolean aground = false;
 		if (canOccupy(level, target, newYaw)) {
 			moveShip(target, newYaw);
-		} else if (canOccupy(level, position(), newYaw)) {
-			moveShip(position(), newYaw);
+		} else if (canOccupy(level, new Vec3(getX(), target.y, getZ()), newYaw)) {
+			moveShip(new Vec3(getX(), target.y, getZ()), newYaw);
 			speed = 0;
 			aground = true;
 		} else {
@@ -237,6 +313,86 @@ public class ShipEntity extends Entity {
 		}
 		entityData.set(DATA_AGROUND, aground);
 		entityData.set(DATA_SPEED, (float) speed);
+
+		recordMotion(fromPos, fromYaw, fromBoxes);
+		// Carry mobs and items standing on deck. Players carry themselves on their own client.
+		for (Entity entity : level.getEntities(this, getHullBounds().inflate(1.0, 2.0, 1.0), Entity::isLocalInstanceAuthoritative)) {
+			carry(entity);
+		}
+	}
+
+	/**
+	 * Heave, pitch and roll: the hull follows the wave heights under its bow, stern and sides
+	 * through a damped spring, so it rises and settles gradually. Heavier ships respond slower.
+	 * Under sail the ship also heels away from the wind.
+	 */
+	private void updateWaves(ServerLevel level, WindField.Wind wind, double windRel, float deploy) {
+		double t = level.getGameTime();
+		double rad = Math.toRadians(getYRot());
+		double fx = -Math.sin(rad), fz = Math.cos(rad);   // bow
+		double sx = -fz, sz = fx;                         // starboard
+		double x = getX(), z = getZ();
+		float dir = wind.directionDeg(), strength = wind.strength();
+
+		double bow = WaveField.height(x + fx * halfLength, z + fz * halfLength, t, dir, strength);
+		double stern = WaveField.height(x - fx * halfLength, z - fz * halfLength, t, dir, strength);
+		double stbd = WaveField.height(x + sx * halfBeam, z + sz * halfBeam, t, dir, strength);
+		double port = WaveField.height(x - sx * halfBeam, z - sz * halfBeam, t, dir, strength);
+		double centre = WaveField.height(x, z, t, dir, strength);
+
+		double inertia = Math.sqrt(Math.max(1.0, stats.mass() / 40.0));
+		double stiffness = 0.08 / inertia;
+
+		double heaveTarget = (bow + stern + port + stbd + 2 * centre) / 6.0;
+		heaveVel = heaveVel * 0.88 + (heaveTarget - heave) * stiffness;
+		heave = Mth.clamp(heave + heaveVel, -WaveField.MAX_AMPLITUDE, WaveField.MAX_AMPLITUDE);
+
+		double pitchTarget = Math.toDegrees(Math.atan2(bow - stern, 2 * halfLength)) + Math.min(1.0, getSpeed() * 2.5);
+		double heel = strength * deploy * Math.sin(Math.toRadians(windRel)) * 3.0;
+		double rollTarget = Math.toDegrees(Math.atan2(port - stbd, 2 * halfBeam)) + heel;
+		pitchVel = pitchVel * 0.85 + (pitchTarget - pitch) * stiffness;
+		rollVel = rollVel * 0.85 + (rollTarget - roll) * stiffness;
+		pitch = Mth.clamp(pitch + pitchVel, -MAX_TILT, MAX_TILT);
+		roll = Mth.clamp(roll + rollVel, -MAX_TILT, MAX_TILT);
+		entityData.set(DATA_PITCH, (float) pitch);
+		entityData.set(DATA_ROLL, (float) roll);
+	}
+
+	private void recordMotion(Vec3 fromPos, float fromYaw, List<AABB> fromBoxes) {
+		tickFromPos = fromPos;
+		tickFromYaw = fromYaw;
+		tickFromBoxes = fromBoxes;
+		tickMotionTime = level().getGameTime();
+	}
+
+	/**
+	 * Moves an entity along with the ship for the tick that just happened: if it is standing on
+	 * the deck it rides along (and turns with the ship); if the hull ran into it, it gets shoved
+	 * out of the way. Call once per tick per entity, after the ship has ticked.
+	 */
+	public void carry(Entity entity) {
+		if (tickFromPos == null || tickMotionTime != level().getGameTime() || entity == this || entity.isPassenger() || entity instanceof ShipEntity || entity.isSpectator()) return;
+		AABB box = entity.getBoundingBox();
+		List<AABB> now = getHullBoxes();
+		boolean onDeck = ShipHull.standsOn(box, tickFromBoxes, 0.3) || ShipHull.standsOn(box, now, 0.3);
+		boolean hit = !onDeck && ShipHull.intersectsAny(box.deflate(0.05), now);
+		if (!onDeck && !hit) return;
+
+		double dYaw = getYRot() - tickFromYaw;
+		Vec3 moved = position().add(rotateY(entity.position().subtract(tickFromPos), dYaw));
+		if (hit) {
+			Vec3 out = new Vec3(moved.x - getX(), 0, moved.z - getZ());
+			if (out.lengthSqr() > 1e-6) moved = moved.add(out.normalize().scale(0.15));
+		}
+		if (moved.distanceToSqr(entity.position()) < 1e-10 && dYaw == 0) return;
+		entity.setPos(moved.x, moved.y, moved.z);
+		if (onDeck && dYaw != 0) {
+			entity.setYRot(entity.getYRot() + (float) dYaw);
+			if (entity instanceof LivingEntity living) {
+				living.setYHeadRot(living.getYHeadRot() + (float) dYaw);
+				living.setYBodyRot(living.yBodyRot + (float) dYaw);
+			}
+		}
 	}
 
 	private void moveShip(Vec3 pos, float yaw) {
@@ -286,7 +442,8 @@ public class ShipEntity extends Entity {
 			case 3 -> Rotation.COUNTERCLOCKWISE_90;
 			default -> Rotation.NONE;
 		};
-		BlockPos anchor = BlockPos.containing(getX(), getY(), getZ());
+		double restY = Double.isNaN(baseY) ? getY() : baseY;
+		BlockPos anchor = BlockPos.containing(getX(), restY + 0.5, getZ());
 
 		List<BlockPos> targets = new ArrayList<>(structure.blocks().size());
 		for (ShipStructure.ShipBlock b : structure.blocks()) {
@@ -297,6 +454,21 @@ public class ShipEntity extends Entity {
 				return;
 			}
 			targets.add(target);
+		}
+
+		// Everyone aboard keeps their spot on deck. Players get extra slack because the server's
+		// view of where they stand lags their client a little.
+		Vec3 snappedPos = new Vec3(anchor.getX() + 0.5, anchor.getY(), anchor.getZ() + 0.5);
+		double snapTurn = structure.baseYaw() + quarterTurns * 90.0 - getYRot();
+		List<Entity> aboard = new ArrayList<>();
+		for (Entity e : level.getEntities(this, getHullBounds().inflate(1.5, 2.0, 1.5), e -> !e.isPassenger() && !(e instanceof ShipEntity))) {
+			double slack = e instanceof Player ? 1.0 : 0.3;
+			if (ShipHull.standsOn(e.getBoundingBox(), getHullBoxes(), slack)) aboard.add(e);
+		}
+		List<Vec3> aboardSpots = new ArrayList<>();
+		for (Entity e : aboard) {
+			Vec3 local = e.position().subtract(position());
+			aboardSpots.add(snappedPos.add(rotateY(new Vec3(local.x, local.y, local.z), snapTurn)).add(0, 0.05, 0));
 		}
 
 		// Solid blocks first so torches, ladders and the like have something to hang on.
@@ -311,17 +483,21 @@ public class ShipEntity extends Entity {
 		}
 		drainHull(level, targets);
 
-		// Put everyone on deck where their seat was.
+		// The captain steps off at the wheel.
 		List<Entity> riders = new ArrayList<>(getPassengers());
-		List<Vec3> spots = new ArrayList<>();
+		List<Vec3> riderSpots = new ArrayList<>();
 		for (int i = 0; i < riders.size(); i++) {
 			BlockPos seat = i < seats.size() ? seats.get(i) : structure.helm();
-			spots.add(Vec3.atBottomCenterOf(anchor.offset(rotate(seat, quarterTurns))));
+			riderSpots.add(Vec3.atBottomCenterOf(anchor.offset(rotate(seat, quarterTurns))));
 		}
 		ejectPassengers();
 		for (int i = 0; i < riders.size(); i++) {
-			Vec3 spot = spots.get(i);
+			Vec3 spot = riderSpots.get(i);
 			riders.get(i).teleportTo(spot.x, spot.y + 0.05, spot.z);
+		}
+		for (int i = 0; i < aboard.size(); i++) {
+			Vec3 spot = aboardSpots.get(i);
+			aboard.get(i).teleportTo(spot.x, spot.y, spot.z);
 		}
 
 		level.playSound(null, getX(), getY(), getZ(), SoundEvents.CHAIN_PLACE, SoundSource.NEUTRAL, 1.0f, 0.8f);
@@ -367,7 +543,7 @@ public class ShipEntity extends Entity {
 	}
 
 	// ---------------------------------------------------------------------------------------------
-	// Passengers
+	// The captain
 
 	@Override
 	public InteractionResult interact(Player player, InteractionHand hand, Vec3 location) {
@@ -379,20 +555,20 @@ public class ShipEntity extends Entity {
 		return InteractionResult.SUCCESS;
 	}
 
+	/** Only the captain rides; everyone else walks the deck. */
 	@Override
 	protected boolean canAddPassenger(Entity passenger) {
-		return getPassengers().size() < Math.min(MAX_PASSENGERS, Math.max(1, seats.size()));
+		return getPassengers().isEmpty();
 	}
 
 	@Override
 	protected void positionRider(Entity passenger, MoveFunction moveFunction) {
 		if (!hasPassenger(passenger)) return;
-		int index = getPassengers().indexOf(passenger);
-		BlockPos seat = index >= 0 && index < seats.size() ? seats.get(index) : getStructure().helm();
+		BlockPos seat = seats.isEmpty() ? getStructure().helm() : seats.getFirst();
 		Vec3 p = localToWorld(position(), getYRot() - getStructure().baseYaw(), seat.getX(), seat.getY(), seat.getZ());
 		moveFunction.accept(passenger, p.x, p.y, p.z);
 
-		// Turn riders with the ship.
+		// Turn the captain with the ship.
 		float delta = getYRot() - lastYaw;
 		if (delta != 0f) {
 			passenger.setYRot(passenger.getYRot() + delta);
@@ -400,11 +576,11 @@ public class ShipEntity extends Entity {
 		}
 	}
 
+	/** Stepping away from the wheel leaves you standing on deck right behind it. */
 	@Override
 	public Vec3 getDismountLocationForPassenger(LivingEntity passenger) {
-		int index = getPassengers().indexOf(passenger);
-		BlockPos seat = index >= 0 && index < seats.size() ? seats.get(index) : getStructure().helm();
-		return localToWorld(position(), getYRot() - getStructure().baseYaw(), seat.getX(), seat.getY() + 0.1, seat.getZ());
+		BlockPos seat = seats.isEmpty() ? getStructure().helm() : seats.getFirst();
+		return localToWorld(position(), getYRot() - getStructure().baseYaw(), seat.getX(), seat.getY() + 0.05, seat.getZ());
 	}
 
 	@Override
@@ -437,6 +613,7 @@ public class ShipEntity extends Entity {
 		output.putFloat("sail_deploy", getSailDeploy());
 		output.putFloat("sail_trim", getSailTrim());
 		output.putFloat("speed", getSpeed());
+		output.putDouble("base_y", Double.isNaN(baseY) ? getY() : baseY);
 	}
 
 	@Override
@@ -445,5 +622,7 @@ public class ShipEntity extends Entity {
 		entityData.set(DATA_SAIL_DEPLOY, input.getFloatOr("sail_deploy", 0f));
 		entityData.set(DATA_SAIL_TRIM, input.getFloatOr("sail_trim", 0f));
 		entityData.set(DATA_SPEED, input.getFloatOr("speed", 0f));
+		double saved = input.getDoubleOr("base_y", Double.NaN);
+		if (!Double.isNaN(saved)) baseY = saved;
 	}
 }

@@ -63,7 +63,7 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 			server.runCommand("setblock %d %d %d seaofsteves:ship_wheel[facing=south]".formatted(wheel.getX(), wheel.getY(), wheel.getZ()));
 			server.runCommand(tp(cx, deck + 1, cz - 5));
 			server.runCommand("time set noon");
-			server.runCommand("sos wind set 0 1.0"); // a tailwind: blowing south, the way the bow points
+			server.runCommand("sos wind set 0 0.6"); // a tailwind: blowing south, the way the bow points
 			singleplayer.getConnection().waitForChunksRender();
 			context.runOnClient(client -> client.options.setCameraType(CameraType.THIRD_PERSON_BACK));
 			context.waitTicks(5);
@@ -88,31 +88,77 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 
 			// --- 4. Raise the sails and get underway. -------------------------------------------------
 			double startZ = shipZ(server);
-			context.getInput().holdKeyFor(options -> options.keyUp, 40);
+			context.getInput().holdKeyFor(options -> options.keyUp, 25);
 			context.waitTicks(20);
 			context.takeScreenshot("seaofsteves_04_underway");
 			double travelled = shipZ(server) - startZ;
-			if (travelled < 2.0) {
+			if (travelled < 1.5) {
 				throw new AssertionError("Ship should have sailed south with a tailwind, moved only " + travelled);
 			}
 
-			// --- 5. Crosswind: trim the sails and turn. ------------------------------------------------
+			// --- 5. Waves: the hull should rise and fall on its own. -----------------------------------
+			double minY = Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
+			for (int i = 0; i < 30; i++) {
+				double shipY = server.computeOnServer(s -> firstShip(s).getY());
+				minY = Math.min(minY, shipY);
+				maxY = Math.max(maxY, shipY);
+				context.waitTick();
+			}
+			if (maxY - minY < 0.003) throw new AssertionError("Ship should heave on the waves, range " + (maxY - minY));
+
+			// --- 6. Step away from the wheel and walk the deck while under way. ------------------------
+			context.getInput().holdKeyFor(options -> options.keyShift, 2);
+			context.waitFor(client -> client.player.getVehicle() == null, 60);
+			context.waitTicks(10);
+			context.getInput().holdKeyFor(options -> options.keyRight, 6); // stroll toward the starboard rail
+			double walkStartZ = shipZ(server);
+			context.waitTicks(30);
+			context.runOnClient(client -> {
+				ShipEntity ship = client.level.getEntitiesOfClass(ShipEntity.class, client.player.getBoundingBox().inflate(20)).getFirst();
+				double dx = client.player.getX() - ship.getX(), dy = client.player.getY() - ship.getY(), dz = client.player.getZ() - ship.getZ();
+				if (client.player.isInWater() || !client.player.onGround() || Math.abs(dx) > 3 || Math.abs(dz) > 6.5 || Math.abs(dy - 1.0) > 0.45) {
+					throw new AssertionError("Player should be standing on the deck, offset from ship (%.2f, %.2f, %.2f), onGround=%s, inWater=%s"
+							.formatted(dx, dy, dz, client.player.onGround(), client.player.isInWater()));
+				}
+			});
+			if (shipZ(server) - walkStartZ < 0.5) throw new AssertionError("Ship should keep sailing while the captain walks the deck");
+			context.runOnClient(client -> client.options.setCameraType(CameraType.THIRD_PERSON_BACK));
+			context.waitTicks(5);
+			context.takeScreenshot("seaofsteves_05_walking_the_deck");
+			context.runOnClient(client -> client.options.setCameraType(CameraType.FIRST_PERSON));
+
+			// Take the wheel again by right-clicking it.
+			float[] look = context.computeOnClient(client -> {
+				ShipEntity ship = client.level.getEntitiesOfClass(ShipEntity.class, client.player.getBoundingBox().inflate(20)).getFirst();
+				var eye = client.player.getEyePosition();
+				var helm = ship.getBoundingBox().getCenter();
+				double dx = helm.x - eye.x, dy = helm.y - eye.y, dz = helm.z - eye.z;
+				float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
+				float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
+				return new float[] {yaw, pitch};
+			});
+			context.getInput().lookAt(look[0], look[1]);
+			context.waitTick();
+			context.getInput().pressKey(options -> options.keyUse);
+			context.waitFor(client -> client.player.getVehicle() instanceof ShipEntity, 60);
+
+			// --- 7. Crosswind: trim the sails and turn. ------------------------------------------------
 			server.runCommand("sos wind set 90 0.8"); // now blowing west, across the bow
 			context.waitTicks(2);
-			context.takeScreenshot("seaofsteves_05_crosswind_untrimmed");
+			context.takeScreenshot("seaofsteves_06_crosswind_untrimmed");
 			context.getInput().holdKeyFor(ShipControls.TRIM_STARBOARD, 18);
 			context.getInput().holdKeyFor(options -> options.keyLeft, 10);
 			context.waitTicks(2);
-			context.takeScreenshot("seaofsteves_06_crosswind_trimmed");
+			context.takeScreenshot("seaofsteves_07_crosswind_trimmed");
 			float trim = server.computeOnServer(s -> firstShip(s).getSailTrim());
 			if (trim < 30f) throw new AssertionError("Trim keys should swing the sails to starboard, trim=" + trim);
 
 			context.runOnClient(client -> client.options.setCameraType(CameraType.THIRD_PERSON_BACK));
 			context.waitTicks(5);
-			context.takeScreenshot("seaofsteves_07_third_person");
+			context.takeScreenshot("seaofsteves_08_third_person");
 			context.runOnClient(client -> client.options.setCameraType(CameraType.FIRST_PERSON));
 
-			// --- 6. Reef the sails, slow down and drop anchor. ------------------------------------------
+			// --- 8. Reef the sails, slow down and drop anchor. ------------------------------------------
 			context.getInput().holdKeyFor(options -> options.keyDown, 60);
 			server.waitFor(s -> Math.abs(firstShip(s).getSpeed()) < 0.1f, 600);
 			context.getInput().pressKey(ShipControls.ANCHOR);
@@ -131,7 +177,7 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 			if (wheels != 2) throw new AssertionError("Expected the ship's wheel back in the world (plus the land raft's), found " + wheels);
 			context.runOnClient(client -> client.options.setCameraType(CameraType.THIRD_PERSON_BACK));
 			context.waitTicks(10);
-			context.takeScreenshot("seaofsteves_08_anchored");
+			context.takeScreenshot("seaofsteves_09_anchored");
 			context.runOnClient(client -> client.options.setCameraType(CameraType.FIRST_PERSON));
 			server.runCommand("sos wind reset");
 		}
