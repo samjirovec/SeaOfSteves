@@ -22,9 +22,9 @@ public class SeaOfStevesClient implements ClientModInitializer {
 		// along with any ship they're standing on, after every entity (ships included) has ticked.
 		ClientTickEvents.END_LEVEL_TICK.register(level -> {
 			LocalPlayer player = Minecraft.getInstance().player;
-			if (player == null || player.level() != level) return;
 			for (ShipEntity ship : ShipCollisions.shipsIn(level)) {
-				ship.carry(player);
+				if (player != null && player.level() == level) ship.carry(player);
+				ship.finishCarrying();
 			}
 		});
 		HudElementRegistry.attachElementAfter(VanillaHudElements.HOTBAR, SeaOfSteves.id("sailing_hud"), new SailingHud());

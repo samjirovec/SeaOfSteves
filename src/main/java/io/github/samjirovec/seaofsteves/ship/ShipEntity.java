@@ -82,7 +82,8 @@ public class ShipEntity extends Entity {
 	private Vec3 tickFromPos;
 	private float tickFromYaw;
 	private List<AABB> tickFromBoxes = List.of();
-	private long tickMotionTime = Long.MIN_VALUE;
+	/** Set when the ship has moved this tick and riders on deck still need carrying. */
+	private boolean carryPending;
 
 	public ShipEntity(EntityType<? extends ShipEntity> type, Level level) {
 		super(type, level);
@@ -319,6 +320,7 @@ public class ShipEntity extends Entity {
 		for (Entity entity : level.getEntities(this, getHullBounds().inflate(1.0, 2.0, 1.0), Entity::isLocalInstanceAuthoritative)) {
 			carry(entity);
 		}
+		finishCarrying();
 	}
 
 	/**
@@ -362,16 +364,17 @@ public class ShipEntity extends Entity {
 		tickFromPos = fromPos;
 		tickFromYaw = fromYaw;
 		tickFromBoxes = fromBoxes;
-		tickMotionTime = level().getGameTime();
+		carryPending = true;
 	}
 
 	/**
 	 * Moves an entity along with the ship for the tick that just happened: if it is standing on
 	 * the deck it rides along (and turns with the ship); if the hull ran into it, it gets shoved
-	 * out of the way. Call once per tick per entity, after the ship has ticked.
+	 * out of the way. Call once per tick per entity, after the ship has ticked and before
+	 * {@link #finishCarrying()}.
 	 */
 	public void carry(Entity entity) {
-		if (tickFromPos == null || tickMotionTime != level().getGameTime() || entity == this || entity.isPassenger() || entity instanceof ShipEntity || entity.isSpectator()) return;
+		if (!carryPending || entity == this || entity.isPassenger() || entity instanceof ShipEntity || entity.isSpectator()) return;
 		AABB box = entity.getBoundingBox();
 		List<AABB> now = getHullBoxes();
 		boolean onDeck = ShipHull.standsOn(box, tickFromBoxes, 0.3) || ShipHull.standsOn(box, now, 0.3);
@@ -393,6 +396,11 @@ public class ShipEntity extends Entity {
 				living.setYBodyRot(living.yBodyRot + (float) dYaw);
 			}
 		}
+	}
+
+	/** Call after {@link #carry} has been applied to everything for this tick. */
+	public void finishCarrying() {
+		carryPending = false;
 	}
 
 	private void moveShip(Vec3 pos, float yaw) {
