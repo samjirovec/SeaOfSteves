@@ -78,12 +78,12 @@ public class ShipEntity extends Entity {
 	private double heave, heaveVel, pitch, pitchVel, roll, rollVel;
 	private float prevPitch, prevRoll;
 
-	// How the ship moved during the last tick, used to carry whatever stands on it.
-	private Vec3 tickFromPos;
-	private float tickFromYaw;
-	private List<AABB> tickFromBoxes = List.of();
-	/** Set when the ship has moved this tick and riders on deck still need carrying. */
-	private boolean carryPending;
+	// Where the ship was at the previous carry pass; whatever stands on deck is moved by the
+	// difference. (On clients the ship is moved by interpolation outside its own tick, so the
+	// start-of-tick position isn't a reliable reference.)
+	private Vec3 carryFromPos;
+	private float carryFromYaw;
+	private List<AABB> carryFromBoxes = List.of();
 
 	public ShipEntity(EntityType<? extends ShipEntity> type, Level level) {
 		super(type, level);
@@ -247,9 +247,6 @@ public class ShipEntity extends Entity {
 	@Override
 	public void tick() {
 		lastYaw = getYRot();
-		Vec3 fromPos = position();
-		float fromYaw = getYRot();
-		List<AABB> fromBoxes = getHullBoxes();
 		ShipCollisions.track(this);
 		super.tick();
 
@@ -257,7 +254,6 @@ public class ShipEntity extends Entity {
 			prevPitch = entityData.get(DATA_PITCH);
 			prevRoll = entityData.get(DATA_ROLL);
 			interpolationHandler.interpolate();
-			recordMotion(fromPos, fromYaw, fromBoxes);
 			return;
 		}
 		if (getStructure().isEmpty()) {
@@ -315,7 +311,6 @@ public class ShipEntity extends Entity {
 		entityData.set(DATA_AGROUND, aground);
 		entityData.set(DATA_SPEED, (float) speed);
 
-		recordMotion(fromPos, fromYaw, fromBoxes);
 		// Carry mobs and items standing on deck. Players carry themselves on their own client.
 		for (Entity entity : level.getEntities(this, getHullBounds().inflate(1.0, 2.0, 1.0), Entity::isLocalInstanceAuthoritative)) {
 			carry(entity);
@@ -360,29 +355,23 @@ public class ShipEntity extends Entity {
 		entityData.set(DATA_ROLL, (float) roll);
 	}
 
-	private void recordMotion(Vec3 fromPos, float fromYaw, List<AABB> fromBoxes) {
-		tickFromPos = fromPos;
-		tickFromYaw = fromYaw;
-		tickFromBoxes = fromBoxes;
-		carryPending = true;
-	}
-
 	/**
-	 * Moves an entity along with the ship for the tick that just happened: if it is standing on
+	 * Moves an entity along with the ship since the previous carry pass: if it is standing on
 	 * the deck it rides along (and turns with the ship); if the hull ran into it, it gets shoved
 	 * out of the way. Call once per tick per entity, after the ship has ticked and before
 	 * {@link #finishCarrying()}.
 	 */
 	public void carry(Entity entity) {
-		if (!carryPending || entity == this || entity.isPassenger() || entity instanceof ShipEntity || entity.isSpectator()) return;
+		if (carryFromPos == null || entity == this || entity.isPassenger() || entity instanceof ShipEntity || entity.isSpectator()) return;
 		AABB box = entity.getBoundingBox();
 		List<AABB> now = getHullBoxes();
-		boolean onDeck = ShipHull.standsOn(box, tickFromBoxes, 0.3) || ShipHull.standsOn(box, now, 0.3);
+		boolean onDeck = ShipHull.standsOn(box, carryFromBoxes, 0.3) || ShipHull.standsOn(box, now, 0.3);
 		boolean hit = !onDeck && ShipHull.intersectsAny(box.deflate(0.05), now);
 		if (!onDeck && !hit) return;
 
-		double dYaw = getYRot() - tickFromYaw;
-		Vec3 moved = position().add(rotateY(entity.position().subtract(tickFromPos), dYaw));
+		double dYaw = getYRot() - carryFromYaw;
+		if (position().distanceToSqr(carryFromPos) > 16.0) return; // a resync jump, not sailing
+		Vec3 moved = position().add(rotateY(entity.position().subtract(carryFromPos), dYaw));
 		if (hit) {
 			Vec3 out = new Vec3(moved.x - getX(), 0, moved.z - getZ());
 			if (out.lengthSqr() > 1e-6) moved = moved.add(out.normalize().scale(0.15));
@@ -400,7 +389,9 @@ public class ShipEntity extends Entity {
 
 	/** Call after {@link #carry} has been applied to everything for this tick. */
 	public void finishCarrying() {
-		carryPending = false;
+		carryFromPos = position();
+		carryFromYaw = getYRot();
+		carryFromBoxes = getHullBoxes();
 	}
 
 	private void moveShip(Vec3 pos, float yaw) {
