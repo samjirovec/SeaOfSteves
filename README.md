@@ -11,6 +11,15 @@ your sails to keep your speed up. A HUD shows the wind, your sails and your spee
 > **Status: prototype (v0.1.0).** The core loop works and is covered by an automated in-game
 > test. See [Known limitations](#known-limitations) before building your flagship.
 
+| Built on the water | Underway with a tailwind |
+|---|---|
+| ![A ship built on water](docs/screenshots/ship_built.png) | ![Sailing HUD while underway](docs/screenshots/underway_hud.png) |
+| **Crosswind, sails trimmed to the ideal angle** | **Anchor dropped: the ship is blocks again** |
+| ![Crosswind trimmed](docs/screenshots/crosswind_trimmed.png) | ![Anchored](docs/screenshots/anchored.png) |
+
+*These screenshots were taken automatically by the in-game test on CI. The chat text comes from
+the commands the test uses to build the scene.*
+
 ## Features
 
 | | |
