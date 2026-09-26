@@ -164,10 +164,12 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 			server.runCommand("sos wind set 90 0.8"); // now blowing west, across the bow
 			context.waitTicks(2);
 			context.takeScreenshot("seaofsteves_06_crosswind_untrimmed");
+			rigShot(context, "seaofsteves_06b_sails_square");
 			context.getInput().holdKeyFor(ShipControls.TRIM_STARBOARD, 18);
 			context.getInput().holdKeyFor(options -> options.keyLeft, 10);
 			context.waitTicks(2);
 			context.takeScreenshot("seaofsteves_07_crosswind_trimmed");
+			rigShot(context, "seaofsteves_07b_sails_trimmed");
 			float trim = server.computeOnServer(s -> firstShip(s).getSailTrim());
 			if (trim < 30f) throw new AssertionError("Trim keys should swing the sails to starboard, trim=" + trim);
 
@@ -178,6 +180,7 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 
 			// --- 8. Reef the sails, slow down and drop anchor. ------------------------------------------
 			context.getInput().holdKeyFor(options -> options.keyDown, 60);
+			rigShot(context, "seaofsteves_08b_sails_furled");
 			server.waitFor(s -> Math.abs(firstShip(s).getSpeed()) < 0.1f, 600);
 			context.getInput().pressKey(ShipControls.ANCHOR);
 			context.waitFor(client -> client.player.getVehicle() == null, 100);
@@ -199,6 +202,17 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 			context.runOnClient(client -> client.options.setCameraType(CameraType.FIRST_PERSON));
 			server.runCommand("sos wind reset");
 		}
+	}
+
+	/** Third-person view from behind the captain, looking up at the masts and sails. */
+	private static void rigShot(ClientGameTestContext context, String name) {
+		float yaw = context.computeOnClient(client -> client.player.getYRot());
+		context.runOnClient(client -> client.options.setCameraType(CameraType.THIRD_PERSON_BACK));
+		context.getInput().lookAt(yaw, -28f);
+		context.waitTicks(3);
+		context.takeScreenshot(name);
+		context.runOnClient(client -> client.options.setCameraType(CameraType.FIRST_PERSON));
+		context.getInput().lookAt(yaw, 20f);
 	}
 
 	/** Teleports the player to stand in the middle of the given block, facing south. */
