@@ -164,12 +164,12 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 			server.runCommand("sos wind set 90 0.8"); // now blowing west, across the bow
 			context.waitTicks(2);
 			context.takeScreenshot("seaofsteves_06_crosswind_untrimmed");
-			rigShot(context, "seaofsteves_06b_sails_square");
+			rigShot(context, server, "seaofsteves_06b_sails_square");
 			context.getInput().holdKeyFor(ShipControls.TRIM_STARBOARD, 18);
 			context.getInput().holdKeyFor(options -> options.keyLeft, 10);
 			context.waitTicks(2);
 			context.takeScreenshot("seaofsteves_07_crosswind_trimmed");
-			rigShot(context, "seaofsteves_07b_sails_trimmed");
+			rigShot(context, server, "seaofsteves_07b_sails_trimmed");
 			float trim = server.computeOnServer(s -> firstShip(s).getSailTrim());
 			if (trim < 30f) throw new AssertionError("Trim keys should swing the sails to starboard, trim=" + trim);
 
@@ -180,7 +180,7 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 
 			// --- 8. Reef the sails, slow down and drop anchor. ------------------------------------------
 			context.getInput().holdKeyFor(options -> options.keyDown, 60);
-			rigShot(context, "seaofsteves_08b_sails_furled");
+			rigShot(context, server, "seaofsteves_08b_sails_furled");
 			server.waitFor(s -> Math.abs(firstShip(s).getSpeed()) < 0.1f, 600);
 			context.getInput().pressKey(ShipControls.ANCHOR);
 			context.waitFor(client -> client.player.getVehicle() == null, 100);
@@ -204,15 +204,32 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 		}
 	}
 
-	/** Third-person view from behind the captain, looking up at the masts and sails. */
-	private static void rigShot(ClientGameTestContext context, String name) {
-		float yaw = context.computeOnClient(client -> client.player.getYRot());
-		context.runOnClient(client -> client.options.setCameraType(CameraType.THIRD_PERSON_BACK));
-		context.getInput().lookAt(yaw, -28f);
-		context.waitTicks(3);
+	/** A view of the whole ship from a camera floating off its starboard quarter. */
+	private static void rigShot(ClientGameTestContext context, TestServerContext server, String name) {
+		double[] cam = context.computeOnClient(client -> {
+			ShipEntity ship = client.level.getEntitiesOfClass(ShipEntity.class, client.player.getBoundingBox().inflate(30)).getFirst();
+			double rad = Math.toRadians(ship.getYRot());
+			double fx = -Math.sin(rad), fz = Math.cos(rad), sx = -fz, sz = fx;
+			double x = ship.getX() + sx * 12 - fx * 4, y = ship.getY() + 5, z = ship.getZ() + sz * 12 - fz * 4;
+			double tx = ship.getX(), ty = ship.getY() + 3, tz = ship.getZ();
+			double dx = tx - x, dy = ty - y, dz = tz - z;
+			double yaw = Math.toDegrees(Math.atan2(-dx, dz));
+			double pitch = -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
+			return new double[] {x, y, z, yaw, pitch};
+		});
+		server.runCommand(String.format(java.util.Locale.ROOT,
+				"summon minecraft:armor_stand %.2f %.2f %.2f {Invisible:1b,NoGravity:1b,Marker:1b,Tags:[\"sos_cam\"],Rotation:[%.1ff,%.1ff]}",
+				cam[0], cam[1] - 1.7, cam[2], cam[3], cam[4]));
+		context.waitTicks(4);
+		context.runOnClient(client -> {
+			var stands = client.level.getEntitiesOfClass(net.minecraft.world.entity.decoration.ArmorStand.class,
+					new net.minecraft.world.phys.AABB(cam[0] - 2, cam[1] - 4, cam[2] - 2, cam[0] + 2, cam[1] + 2, cam[2] + 2));
+			if (!stands.isEmpty()) client.setCameraEntity(stands.getFirst());
+		});
+		context.waitTicks(2);
 		context.takeScreenshot(name);
-		context.runOnClient(client -> client.options.setCameraType(CameraType.FIRST_PERSON));
-		context.getInput().lookAt(yaw, 20f);
+		context.runOnClient(client -> client.setCameraEntity(client.player));
+		server.runCommand("kill @e[tag=sos_cam]");
 	}
 
 	/** Teleports the player to stand in the middle of the given block, facing south. */
