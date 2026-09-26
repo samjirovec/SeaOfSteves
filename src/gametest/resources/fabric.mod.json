@@ -1,0 +1,14 @@
+{
+	"schemaVersion": 1,
+	"id": "seaofsteves-gametest",
+	"version": "1.0.0",
+	"name": "Sea of Steves Game Tests",
+	"environment": "*",
+	"entrypoints": {
+		"fabric-client-gametest": ["io.github.samjirovec.seaofsteves.gametest.SeaOfStevesClientGameTest"]
+	},
+	"depends": {
+		"seaofsteves": "*",
+		"fabric-client-gametest-api-v1": "*"
+	}
+}

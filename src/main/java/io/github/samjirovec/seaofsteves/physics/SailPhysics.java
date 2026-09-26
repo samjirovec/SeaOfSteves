@@ -13,9 +13,12 @@ public final class SailPhysics {
 	public static final float MAX_TRIM = 85f;
 
 	/** Drive force per sail block at full wind, full canvas and perfect trim. */
-	public static final double SAIL_FORCE = 0.045;
-	/** Speed-proportional drag coefficient. */
-	public static final double LINEAR_DRAG = 0.015;
+	public static final double SAIL_FORCE = 0.12;
+	/**
+	 * Speed-proportional drag per unit of mass. Because it scales with mass, every ship loses
+	 * speed at the same rate (~2.5 s time constant) once its sails are furled.
+	 */
+	public static final double LINEAR_DRAG = 0.02;
 	/** Speed-squared drag coefficient, scaled by the hull's cross-section. */
 	public static final double QUADRATIC_DRAG = 0.9;
 	/** Hard cap on speed in blocks per tick (~16 m/s). */
@@ -74,11 +77,10 @@ public final class SailPhysics {
 	 */
 	public static double stepSpeed(double speed, ShipStats stats, double windStrength, double windRelDeg, double trimDeg, double deploy) {
 		double drive = SAIL_FORCE * stats.sailArea() * deploy * windStrength * efficiency(windRelDeg, trimDeg);
-		double drag = LINEAR_DRAG * speed + QUADRATIC_DRAG * stats.dragFactor() * speed * Math.abs(speed);
+		double drag = LINEAR_DRAG * stats.mass() * speed + QUADRATIC_DRAG * stats.dragFactor() * speed * Math.abs(speed);
 		double accel = (drive - drag) / stats.mass();
 		double next = speed + accel;
-		// Linear drag alone can't reverse the ship; clamp tiny values to rest.
-		if (Math.abs(next) < 1e-4 && deploy <= 0) next = 0;
+		if (Math.abs(next) < 1e-3 && drive <= 0) next = 0;
 		return Math.max(-MAX_SPEED * 0.25, Math.min(MAX_SPEED, next));
 	}
 

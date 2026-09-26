@@ -21,6 +21,7 @@ import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
 /** Turns a floating structure of blocks into a {@link ShipEntity}. */
@@ -137,7 +138,7 @@ public final class ShipAssembler {
 
 	/** Blocks that count as part of a ship. Water, air, seagrass and similar are ignored. */
 	static boolean isShipMaterial(BlockState state) {
-		if (state.isAir() || state.liquid()) return false;
+		if (state.isAir() || state.getBlock() instanceof LiquidBlock) return false;
 		if (state.canBeReplaced()) return false;
 		return !state.is(Blocks.KELP) && !state.is(Blocks.KELP_PLANT) && !state.is(Blocks.BUBBLE_COLUMN);
 	}

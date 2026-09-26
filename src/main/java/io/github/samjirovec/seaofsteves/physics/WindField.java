@@ -15,7 +15,22 @@ public final class WindField {
 	/** Ticks for the wind pattern to meaningfully shift (~2 in-game days). */
 	public static final double DRIFT_TICKS = 48000.0;
 
+	private static volatile Wind override;
+
 	private WindField() {
+	}
+
+	/** Pins the wind everywhere (for testing / servers that want calm seas). */
+	public static void setOverride(float directionDeg, float strength) {
+		override = new Wind((float) wrapDegrees(directionDeg), strength);
+	}
+
+	public static void clearOverride() {
+		override = null;
+	}
+
+	public static boolean hasOverride() {
+		return override != null;
 	}
 
 	public record Wind(float directionDeg, float strength) {
@@ -29,6 +44,9 @@ public final class WindField {
 	 * @param weather  0 = clear, 1 = rain, 2 = thunder
 	 */
 	public static Wind sample(long seed, double x, double z, long time, int weather) {
+		Wind pinned = override;
+		if (pinned != null) return pinned;
+
 		double t = time / DRIFT_TICKS;
 
 		// Large-scale current direction (full circle) plus local eddy deflection (+-45 deg).

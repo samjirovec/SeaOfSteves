@@ -1,5 +1,6 @@
 package io.github.samjirovec.seaofsteves;
 
+import io.github.samjirovec.seaofsteves.command.SosCommand;
 import io.github.samjirovec.seaofsteves.network.ModNetworking;
 import io.github.samjirovec.seaofsteves.registry.ModBlocks;
 import io.github.samjirovec.seaofsteves.registry.ModEntities;
@@ -19,6 +20,7 @@ public class SeaOfSteves implements ModInitializer {
 		ModBlocks.init();
 		ModEntities.init();
 		ModNetworking.init();
+		SosCommand.init();
 
 		CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.FUNCTIONAL_BLOCKS).register(output -> {
 			output.accept(ModBlocks.SHIP_WHEEL);

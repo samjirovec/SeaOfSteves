@@ -18,11 +18,36 @@ jobs:
         run: chmod +x ./gradlew
       - name: build
         run: ./gradlew build --stacktrace
-      - name: dump minecraft API signatures (dev aid)
-        if: always() && hashFiles('.github/api-dump-classes.txt') != ''
-        run: bash .github/api-dump.sh
       - name: capture build artifacts
         uses: actions/upload-artifact@v7
         with:
           name: SeaOfSteves
           path: build/libs/
+
+  # Launches a real Minecraft client, builds a ship, sails it and takes screenshots.
+  client-gametest:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v6
+      - name: setup jdk
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'microsoft'
+      - name: install software renderer
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+      - name: run client game test
+        run: chmod +x ./gradlew && ./gradlew runClientGameTest --stacktrace
+      - name: upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: Game Test Screenshots
+          path: build/run/clientGameTest/screenshots
+      - name: upload game log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: Game Test Log
+          path: build/run/clientGameTest/logs

@@ -17,6 +17,17 @@ loom {
 	}
 }
 
+fabricApi {
+	// In-game automated test: ./gradlew runClientGameTest (builds a ship, sails it, takes screenshots).
+	configureTests {
+		createSourceSet = true
+		modId = "seaofsteves-gametest"
+		enableGameTests = false
+		enableClientGameTests = true
+		eula = true
+	}
+}
+
 dependencies {
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"

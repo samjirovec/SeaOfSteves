@@ -1,1 +1,0 @@
-code:net.minecraft.client.KeyMapping$Category
