@@ -10,6 +10,7 @@ while read -r line; do
   case "$line" in
     grep:*) pat="${line#grep:}"; echo "== classes matching $pat =="
       for j in $JARS; do unzip -Z1 "$j" 2>/dev/null | grep -E "$pat" | grep '\.class$' | grep -v '\$[0-9]' ; done | sort -u ;;
+    code:*) cls="${line#code:}"; echo "== CODE $cls =="; javap -cp "$CP" -p -c "$cls" 2>&1 | grep -v -E '^\s+[0-9]+: (aload|iload|fload|dload|astore|istore|fstore|dup|pop|return|areturn|ireturn|freturn|iconst|fconst|dconst|ldc|bipush|sipush|i2f|f2d|d2f|checkcast)' ;;
     *) echo "== $line =="; javap -cp "$CP" -p "$line" 2>&1 ;;
   esac
 done < .github/api-dump-classes.txt
