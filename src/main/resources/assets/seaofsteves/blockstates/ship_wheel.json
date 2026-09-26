@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "seaofsteves:block/ship_wheel" },
+    "facing=east": { "model": "seaofsteves:block/ship_wheel", "y": 90 },
+    "facing=south": { "model": "seaofsteves:block/ship_wheel", "y": 180 },
+    "facing=west": { "model": "seaofsteves:block/ship_wheel", "y": 270 }
+  }
+}

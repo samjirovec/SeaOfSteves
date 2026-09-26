@@ -1,0 +1,20 @@
+{
+  "block.seaofsteves.sail": "Sail",
+  "block.seaofsteves.ship_wheel": "Ship's Wheel",
+  "entity.seaofsteves.ship": "Ship",
+
+  "key.category.seaofsteves.sailing": "Sea of Steves",
+  "key.seaofsteves.trim_port": "Trim Sails to Port",
+  "key.seaofsteves.trim_starboard": "Trim Sails to Starboard",
+  "key.seaofsteves.anchor": "Drop Anchor (Disassemble Ship)",
+
+  "message.seaofsteves.assembled": "Ship assembled: %s blocks, %s sails. W/S sails, A/D helm, R to drop anchor.",
+  "message.seaofsteves.touching_land": "Can't set sail: the ship is touching land at %s %s %s.",
+  "message.seaofsteves.too_big": "Can't set sail: more than %s blocks. Is the ship touching land or the sea floor?",
+  "message.seaofsteves.no_sail": "Can't set sail: the ship needs at least one Sail.",
+  "message.seaofsteves.block_entity": "Can't set sail: %s can't be carried by ships yet.",
+  "message.seaofsteves.not_on_water": "Can't set sail: the ship must be floating on water.",
+  "message.seaofsteves.too_fast": "Slow down before dropping anchor (reef the sails with S).",
+  "message.seaofsteves.no_room": "No room to drop anchor here: blocked at %s %s %s.",
+  "message.seaofsteves.anchored": "Anchor dropped. Your ship is blocks again."
+}
