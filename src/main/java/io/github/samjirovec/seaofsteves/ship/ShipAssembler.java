@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import io.github.samjirovec.seaofsteves.SeaOfSteves;
 import io.github.samjirovec.seaofsteves.block.ShipWheelBlock;
 import io.github.samjirovec.seaofsteves.registry.ModBlocks;
 import io.github.samjirovec.seaofsteves.registry.ModEntities;
@@ -181,6 +182,7 @@ public final class ShipAssembler {
 	}
 
 	private static void fail(Player player, Component message) {
+		SeaOfSteves.LOGGER.debug("Ship assembly refused for {}: {}", player.getName().getString(), message.getString());
 		player.sendOverlayMessage(message);
 	}
 }

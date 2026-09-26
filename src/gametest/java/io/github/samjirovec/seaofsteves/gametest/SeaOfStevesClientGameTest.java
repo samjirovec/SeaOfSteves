@@ -42,7 +42,7 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 			server.runCommand("setblock %d %d %d seaofsteves:sail".formatted(cx - 28, deck + 1, cz - 23));
 			BlockPos landWheel = new BlockPos(cx - 29, deck + 1, cz - 23);
 			server.runCommand("setblock %d %d %d seaofsteves:ship_wheel[facing=south]".formatted(landWheel.getX(), landWheel.getY(), landWheel.getZ()));
-			server.runCommand("tp @p %d.5 %d %d.5 0 20".formatted(landWheel.getX(), landWheel.getY(), landWheel.getZ() - 1));
+			server.runCommand(tp(landWheel.getX(), landWheel.getY(), landWheel.getZ() - 1));
 			singleplayer.getConnection().waitForChunksRender();
 			context.getInput().lookAt(landWheel);
 			context.waitTick();
@@ -61,7 +61,7 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 			server.runCommand(fill(cx - 1, deck + 3, cz + 3, cx + 1, deck + 4, cz + 3, "seaofsteves:sail"));
 			BlockPos wheel = new BlockPos(cx, deck + 1, cz - 4);
 			server.runCommand("setblock %d %d %d seaofsteves:ship_wheel[facing=south]".formatted(wheel.getX(), wheel.getY(), wheel.getZ()));
-			server.runCommand("tp @p %d.5 %d %d.5 0 20".formatted(cx, deck + 1, cz - 5));
+			server.runCommand(tp(cx, deck + 1, cz - 5));
 			server.runCommand("time set noon");
 			server.runCommand("sos wind set 0 1.0"); // a tailwind: blowing south, the way the bow points
 			singleplayer.getConnection().waitForChunksRender();
@@ -74,7 +74,12 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 			context.getInput().lookAt(wheel);
 			context.waitTick();
 			context.getInput().pressKey(options -> options.keyUse);
-			context.waitFor(client -> client.player.getVehicle() instanceof ShipEntity, 100);
+			try {
+				context.waitFor(client -> client.player.getVehicle() instanceof ShipEntity, 100);
+			} catch (AssertionError e) {
+				context.takeScreenshot("seaofsteves_failed_to_assemble");
+				throw e;
+			}
 			context.waitTicks(5);
 			if (!server.computeOnServer(s -> s.overworld().getBlockState(wheel).isAir())) {
 				throw new AssertionError("Assembling should lift the blocks out of the world");
@@ -130,6 +135,11 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 			context.runOnClient(client -> client.options.setCameraType(CameraType.FIRST_PERSON));
 			server.runCommand("sos wind reset");
 		}
+	}
+
+	/** Teleports the player to stand in the middle of the given block, facing south. */
+	private static String tp(int x, int y, int z) {
+		return String.format(java.util.Locale.ROOT, "tp @p %.1f %d %.1f 0 20", x + 0.5, y, z + 0.5);
 	}
 
 	private static String fill(int x1, int y1, int z1, int x2, int y2, int z2, String block) {
