@@ -66,6 +66,13 @@ public record ShipStructure(List<ShipBlock> blocks, BlockPos helm, float baseYaw
 		return blocks.isEmpty();
 	}
 
+	/** Relative position -> block state. */
+	public java.util.Map<BlockPos, BlockState> asMap() {
+		java.util.Map<BlockPos, BlockState> map = new java.util.HashMap<>(blocks.size() * 2);
+		for (ShipBlock b : blocks) map.put(b.pos(), b.state());
+		return map;
+	}
+
 	public ShipStats stats() {
 		int sails = 0;
 		double mass = 0;

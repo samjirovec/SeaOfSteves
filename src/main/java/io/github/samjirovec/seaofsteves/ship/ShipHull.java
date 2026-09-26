@@ -23,10 +23,14 @@ public final class ShipHull {
 	private List<AABB> worldBoxes = List.of();
 	private AABB worldBounds = new AABB(0, 0, 0, 0, 0, 0);
 
-	public ShipHull(ShipStructure structure) {
+	/**
+	 * @param skip blocks without collision while sailing (sails, which swing around their masts)
+	 */
+	public ShipHull(ShipStructure structure, java.util.Set<BlockPos> skip) {
 		List<AABB> boxes = new ArrayList<>();
 		for (ShipStructure.ShipBlock block : structure.blocks()) {
 			BlockPos r = block.pos();
+			if (skip.contains(r)) continue;
 			for (AABB box : block.state().getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO).toAabbs()) {
 				boxes.add(box.move(r.getX() - 0.5, r.getY(), r.getZ() - 0.5));
 			}

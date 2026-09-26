@@ -1,6 +1,25 @@
 {
-  "parent": "minecraft:block/cube_all",
+  "parent": "minecraft:block/block",
   "textures": {
-    "all": "seaofsteves:block/sail"
+    "particle": "seaofsteves:block/sail",
+    "canvas": "seaofsteves:block/sail"
+  },
+  "elements": [
+    {
+      "from": [0, 0, 7.5],
+      "to": [16, 16, 8.5],
+      "faces": {
+        "north": { "uv": [0, 0, 16, 16], "texture": "#canvas" },
+        "south": { "uv": [16, 0, 0, 16], "texture": "#canvas" },
+        "east": { "uv": [0, 0, 1, 16], "texture": "#canvas", "cullface": "east" },
+        "west": { "uv": [15, 0, 16, 16], "texture": "#canvas", "cullface": "west" },
+        "up": { "uv": [0, 0, 16, 1], "texture": "#canvas", "cullface": "up" },
+        "down": { "uv": [0, 15, 16, 16], "texture": "#canvas", "cullface": "down" }
+      }
+    }
+  ],
+  "display": {
+    "gui": { "rotation": [30, 225, 0], "scale": [0.625, 0.625, 0.625] },
+    "fixed": { "scale": [0.5, 0.5, 0.5] }
   }
 }

@@ -53,6 +53,22 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 				throw new AssertionError("A structure touching land must not become a ship");
 			}
 
+			// --- 1b. A floating raft whose sail isn't on a mast must refuse too. -----------------------
+			server.runCommand(fill(cx + 12, deck, cz - 22, cx + 14, deck, cz - 18, "minecraft:oak_planks"));
+			server.runCommand("setblock %d %d %d seaofsteves:sail".formatted(cx + 13, deck + 1, cz - 20));
+			BlockPos looseWheel = new BlockPos(cx + 13, deck + 1, cz - 21);
+			server.runCommand("setblock %d %d %d seaofsteves:ship_wheel[facing=south]".formatted(looseWheel.getX(), looseWheel.getY(), looseWheel.getZ()));
+			server.runCommand(tp(looseWheel.getX(), looseWheel.getY(), looseWheel.getZ() - 1));
+			singleplayer.getConnection().waitForChunksRender();
+			context.getInput().lookAt(looseWheel);
+			context.waitTick();
+			context.getInput().pressKey(options -> options.keyUse);
+			context.waitTicks(10);
+			context.takeScreenshot("seaofsteves_01b_refused_unrigged_sail");
+			if (countShips(server, cx, y, cz) != 0) {
+				throw new AssertionError("A sail that isn't on a mast must not set sail");
+			}
+
 			// --- 2. Build a proper floating ship. ---------------------------------------------------
 			server.runCommand(fill(cx - 2, deck, cz - 5, cx + 2, deck, cz + 5, "minecraft:oak_planks"));
 			server.runCommand(fill(cx, deck + 1, cz, cx, deck + 2, cz, "minecraft:oak_fence"));
@@ -84,6 +100,8 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 			if (!server.computeOnServer(s -> s.overworld().getBlockState(wheel).isAir())) {
 				throw new AssertionError("Assembling should lift the blocks out of the world");
 			}
+			int masts = server.computeOnServer(s -> firstShip(s).getRigs().size());
+			if (masts != 2) throw new AssertionError("Expected the ship's two masts to be rigged, found " + masts);
 			context.takeScreenshot("seaofsteves_03_at_the_helm");
 
 			// --- 4. Raise the sails and get underway. -------------------------------------------------
@@ -174,7 +192,7 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 				}
 				return found;
 			});
-			if (wheels != 2) throw new AssertionError("Expected the ship's wheel back in the world (plus the land raft's), found " + wheels);
+			if (wheels != 3) throw new AssertionError("Expected the ship's wheel back in the world (plus the two test rafts'), found " + wheels);
 			context.runOnClient(client -> client.options.setCameraType(CameraType.THIRD_PERSON_BACK));
 			context.waitTicks(10);
 			context.takeScreenshot("seaofsteves_09_anchored");

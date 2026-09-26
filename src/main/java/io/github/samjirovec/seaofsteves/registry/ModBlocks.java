@@ -21,6 +21,7 @@ public final class ModBlocks {
 			.mapColor(MapColor.WOOL)
 			.strength(0.8f)
 			.sound(SoundType.WOOL)
+			.noOcclusion()
 			.ignitedByLava());
 
 	public static final Block SHIP_WHEEL = register("ship_wheel", ShipWheelBlock::new, BlockBehaviour.Properties.of()

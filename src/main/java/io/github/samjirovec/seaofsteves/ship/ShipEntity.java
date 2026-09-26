@@ -64,7 +64,8 @@ public class ShipEntity extends Entity {
 	private static final float MAX_TILT = 4f;
 
 	private ShipStats stats = ShipStats.EMPTY;
-	private ShipHull hull = new ShipHull(ShipStructure.EMPTY);
+	private ShipHull hull = new ShipHull(ShipStructure.EMPTY, java.util.Set.of());
+	private List<Rig> rigs = List.of();
 	private List<BlockPos> hullBottom = List.of();
 	private List<BlockPos> seats = List.of();
 	private double radius = 0.5;
@@ -76,7 +77,7 @@ public class ShipEntity extends Entity {
 	/** Resting height of the pivot on calm water; waves move the ship above and below it. */
 	private double baseY = Double.NaN;
 	private double heave, heaveVel, pitch, pitchVel, roll, rollVel;
-	private float prevPitch, prevRoll;
+	private float prevPitch, prevRoll, prevTrim, prevDeploy;
 
 	// Where the ship was at the previous carry pass; whatever stands on deck is moved by the
 	// difference. (On clients the ship is moved by interpolation outside its own tick, so the
@@ -118,7 +119,15 @@ public class ShipEntity extends Entity {
 	private void onStructureChanged() {
 		ShipStructure structure = getStructure();
 		stats = structure.stats();
-		hull = new ShipHull(structure);
+		java.util.Map<BlockPos, BlockState> states = structure.asMap();
+		List<Rig> found = new ArrayList<>();
+		java.util.Set<BlockPos> canvas = new java.util.HashSet<>();
+		for (ShipRigging.Rig rig : ShipRigging.find(states).rigs()) {
+			found.add(new Rig(rig, ShipRigging.spanAxis(rig, states), java.util.Set.copyOf(rig.sails())));
+			canvas.addAll(rig.sails());
+		}
+		rigs = List.copyOf(found);
+		hull = new ShipHull(structure, canvas);
 		hullBottom = structure.hullBottom();
 		radius = Math.max(0.5, structure.horizontalRadius());
 		BlockState helm = structure.blocks().stream()
@@ -151,6 +160,14 @@ public class ShipEntity extends Entity {
 
 	public ShipStats getStats() {
 		return stats;
+	}
+
+	/** A mast with its sail, as found on this ship. */
+	public record Rig(ShipRigging.Rig layout, Direction.Axis span, java.util.Set<BlockPos> sails) {
+	}
+
+	public List<Rig> getRigs() {
+		return rigs;
 	}
 
 	/** Rotation of the ship relative to how it was built, in degrees. */
@@ -227,6 +244,16 @@ public class ShipEntity extends Entity {
 		return Mth.lerp(partialTick, prevRoll, entityData.get(DATA_ROLL));
 	}
 
+	/** Sail trim in degrees, interpolated for rendering. */
+	public float getSailTrim(float partialTick) {
+		return Mth.lerp(partialTick, prevTrim, getSailTrim());
+	}
+
+	/** How far the canvas is let out (0..1), interpolated for rendering. */
+	public float getSailDeploy(float partialTick) {
+		return Mth.lerp(partialTick, prevDeploy, getSailDeploy());
+	}
+
 	/** Height of the waterline above the entity position, for the renderer's rocking pivot. */
 	public float getWaterlineOffset() {
 		return getStructure().waterline() + 1f;
@@ -253,6 +280,8 @@ public class ShipEntity extends Entity {
 		if (!(level() instanceof ServerLevel level)) {
 			prevPitch = entityData.get(DATA_PITCH);
 			prevRoll = entityData.get(DATA_ROLL);
+			prevTrim = getSailTrim();
+			prevDeploy = getSailDeploy();
 			interpolationHandler.interpolate();
 			return;
 		}

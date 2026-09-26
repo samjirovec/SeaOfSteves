@@ -64,20 +64,27 @@ public final class ShipAssembler {
 			}
 		}
 
-		// 2. Needs a sail, and nothing we can't carry yet.
-		int sails = 0;
+		// 2. Nothing we can't carry yet, and every sail must be rigged on a mast.
+		java.util.Map<BlockPos, BlockState> states = new java.util.HashMap<>();
 		for (BlockPos pos : found) {
 			BlockState state = level.getBlockState(pos);
-			if (state.is(ModBlocks.SAIL)) sails++;
+			states.put(pos, state);
 			if (state.hasBlockEntity()) {
 				fail(player, Component.translatable("message.seaofsteves.block_entity", state.getBlock().getName()));
 				return;
 			}
 		}
-		if (sails == 0) {
-			fail(player, Component.translatable("message.seaofsteves.no_sail"));
+		ShipRigging.Result rigging = ShipRigging.find(states);
+		if (!rigging.valid()) {
+			BlockPos loose = rigging.looseSails().getFirst();
+			fail(player, Component.translatable("message.seaofsteves.rig." + rigging.problem(), loose.getX(), loose.getY(), loose.getZ(), ShipRigging.MIN_MAST_HEIGHT));
 			return;
 		}
+		if (rigging.rigs().isEmpty()) {
+			fail(player, Component.translatable("message.seaofsteves.no_sail", ShipRigging.MIN_MAST_HEIGHT));
+			return;
+		}
+		int sails = rigging.rigs().stream().mapToInt(r -> r.sails().size()).sum();
 
 		// 3. Must be floating on water.
 		int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
@@ -130,7 +137,7 @@ public final class ShipAssembler {
 		player.startRiding(ship);
 
 		level.playSound(null, helmPos, SoundEvents.WOOD_PLACE, SoundSource.BLOCKS, 1.0f, 0.6f);
-		player.sendOverlayMessage(Component.translatable("message.seaofsteves.assembled", found.size(), sails));
+		player.sendOverlayMessage(Component.translatable("message.seaofsteves.assembled", found.size(), rigging.rigs().size(), sails));
 	}
 
 	private static boolean isSturdy(ServerLevel level, BlockPos pos) {
