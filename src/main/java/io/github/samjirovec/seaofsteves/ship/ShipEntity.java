@@ -376,6 +376,19 @@ public class ShipEntity extends Entity {
 			Vec3 out = new Vec3(moved.x - getX(), 0, moved.z - getZ());
 			if (out.lengthSqr() > 1e-6) moved = moved.add(out.normalize().scale(0.15));
 		}
+		if (onDeck) {
+			// Keep feet on top of the deck: if the hull rose into the entity (waves, tick order),
+			// lift it back out, otherwise collision would ignore the deck and it would sink through.
+			AABB feet = box.move(moved.subtract(entity.position()));
+			double top = Double.NEGATIVE_INFINITY;
+			for (AABB b : now) {
+				if (b.maxX > feet.minX + 1e-3 && b.minX < feet.maxX - 1e-3 && b.maxZ > feet.minZ + 1e-3 && b.minZ < feet.maxZ - 1e-3
+						&& b.maxY > feet.minY && b.maxY <= feet.minY + 0.5) {
+					top = Math.max(top, b.maxY);
+				}
+			}
+			if (top > feet.minY) moved = moved.add(0, top - feet.minY, 0);
+		}
 		if (moved.distanceToSqr(entity.position()) < 1e-10 && dYaw == 0) return;
 		entity.setPos(moved.x, moved.y, moved.z);
 		if (onDeck && dYaw != 0) {

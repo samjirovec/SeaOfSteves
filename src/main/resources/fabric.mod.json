@@ -28,6 +28,10 @@
 	},
 	"icon": "assets/seaofsteves/icon.png",
 	"mixins": [
-		"seaofsteves.mixins.json"
+		"seaofsteves.mixins.json",
+		{
+			"config": "seaofsteves.client.mixins.json",
+			"environment": "client"
+		}
 	]
 }
