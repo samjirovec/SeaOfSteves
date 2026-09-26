@@ -3,8 +3,10 @@
 A Fabric mod for **Minecraft Java Edition 26.3** that lets you build ships block by block on open
 water and sail them.
 
-Build any structure floating on water. If it doesn't touch land and it includes at least one
-**Sail** and a **Ship's Wheel**, right-click the wheel and it becomes a ship entity you can drive.
+Build any structure floating on water. Give it at least one **mast** (a stack of fences with a
+rectangle of **Sail** blocks on top) and a **Ship's Wheel**. If it doesn't touch land,
+right-click the wheel and it becomes a ship entity you can drive. The sails swing around their
+masts as you trim them.
 Heavy ships need more sail. Wind changes from one area of the sea to the next, so you have to trim
 your sails to keep your speed up. A HUD shows the wind, your sails and your speed.
 
@@ -17,10 +19,12 @@ rolls over the waves. The captain stays at the wheel.
 | Built on the water | Underway with a tailwind |
 |---|---|
 | ![A ship built on water](docs/screenshots/ship_built.png) | ![Sailing HUD while underway](docs/screenshots/underway_hud.png) |
-| **Walking the deck while it sails** | **Crosswind, sails trimmed to the ideal angle** |
-| ![Walking the deck](docs/screenshots/walking_the_deck.png) | ![Crosswind trimmed](docs/screenshots/crosswind_trimmed.png) |
-| **Anchor dropped: the ship is blocks again** | |
-| ![Anchored](docs/screenshots/anchored.png) | |
+| **Sails square to the ship** | **Trimmed 45° to starboard for a crosswind** |
+| ![Sails square](docs/screenshots/sails_square.png) | ![Sails trimmed](docs/screenshots/sails_trimmed.png) |
+| **Canvas reefed: sails furled up to their yards** | **Walking the deck while it sails** |
+| ![Sails furled](docs/screenshots/sails_furled.png) | ![Walking the deck](docs/screenshots/walking_the_deck.png) |
+| **A loose sail isn't a mast: assembly refused** | **Anchor dropped: the ship is blocks again** |
+| ![Refused unrigged sail](docs/screenshots/refused_unrigged.png) | ![Anchored](docs/screenshots/anchored.png) |
 
 *These screenshots were taken automatically by the in-game test on CI. The chat text comes from
 the commands the test uses to build the scene.*
@@ -29,9 +33,11 @@ the commands the test uses to build the scene.*
 
 | | |
 |---|---|
-| **Sail** block | Canvas. Every sail block adds sail area. |
+| **Sail** block | A thin panel of canvas that faces you when you place it. Every sail block on a mast adds sail area. |
+| **Masts** | A mast is a stack of **2 or more fences** with a **flat, filled rectangle of Sail blocks** resting on top. Any size works, from 1×1 up. A ship can have several masts. Sails that aren't on a mast, or aren't a flat rectangle, stop the ship from assembling, and the message says which sail and why. |
+| **Sails you can see working** | While sailing, each sail swings around its mast to match your trim, and the mast is drawn running up through the middle of the sail. Reefing (`S`) rolls the canvas up toward the top of the sail. Letting it out (`W`) drops it back down. |
 | **Ship's Wheel** block | The helm. Right-click it to turn the structure into a ship and take control. Place it facing the direction you want to sail. |
-| **Assembly rules** | Everything connected to the wheel becomes the ship. The ship must float on water, must not touch land (dirt, sand, stone, gravel, clay, ice, the sea floor and so on), must have at least one sail, and can have at most 4096 blocks. |
+| **Assembly rules** | Everything connected to the wheel becomes the ship. The ship must float on water, must not touch land (dirt, sand, stone, gravel, clay, ice, the sea floor and so on), must have at least one mast, and can have at most 4096 blocks. |
 | **Weight vs. sail** | Each block has a weight: wool and sails are light, wood is medium, stone is heavy and metal is very heavy. Heavier ships push more water, so they need more sail to reach the same speed. |
 | **Local wind** | Wind direction and strength vary across the world in wide air currents (a few hundred blocks across), with smaller eddies and gusts on top. The pattern drifts slowly over time. Rain strengthens the wind and thunderstorms strengthen it more. |
 | **Sail trim** | Sails push along the direction they face. The keel stops the ship sliding sideways. You can't sail straight into the wind ("in irons"), and in a crosswind you need to angle the sails. The best trim is half the angle of the wind. |
@@ -109,16 +115,19 @@ In Creative mode, both blocks are in the **Functional Blocks** tab.
    a 5×11 deck of planks.
 3. Put a **Ship's Wheel** near the back of the deck, facing the bow (place it while looking
    toward the front of the ship).
-4. Put up a mast (fences work) and hang some **Sails** from it. They must be connected to the
-   rest of the ship through other blocks.
+4. Build a **mast**: stack at least 2 fences on the deck. Then build the sail on top of it as a
+   flat rectangle of **Sail** blocks, one block thick, with its bottom row resting on the top
+   fence. For example, 5 wide × 3 tall across the ship. Face the bow while placing sails so the
+   canvas faces forward. Add more masts if you like.
 5. Stand behind the wheel and **right-click it**. You'll see a message like "Ship assembled: 81
-   blocks, 21 sails", and the sailing HUD appears on the right.
-   * If it refuses, the message tells you why: touching land (with coordinates), no sail, not
-     on water, or a chest/furnace on board.
+   blocks, 2 masts, 21 sails", and the sailing HUD appears on the right.
+   * If it refuses, the message tells you why, with coordinates: touching land, a sail that
+     isn't on a mast (or isn't a flat rectangle), a mast shorter than 2 fences, no mast at all,
+     not on water, or a chest/furnace on board.
 6. Hold `W` to let out the canvas. Check the HUD's wind arrow:
    * **Tailwind** (arrow pointing up): keep the sails square and go fast.
    * **Crosswind**: press `←`/`→` until the white sail line matches the green ideal line.
-     *Trim eff.* should reach 100%.
+     *Trim eff.* should reach 100%. Look up at your masts: the sails swing to match.
    * **Headwind**: you're *in irons*. Turn with `A`/`D` until the wind is on your side.
 7. To get a predictable test, pin the wind: `/sos wind set 0 1` gives a steady wind blowing
    south. Then `/sos wind set 90 0.8` turns it into a crosswind from the east so you can
@@ -133,11 +142,13 @@ In Creative mode, both blocks are in the **Functional Blocks** tab.
 ### Automated in-game test
 
 `./gradlew runClientGameTest` launches a real Minecraft 26.3 client and plays through the core
-loop: it builds a pool, checks that a raft touching the pool wall is refused, builds a ship,
-takes the wheel and sails with a tailwind. It checks that the hull heaves on the waves, then
+loop: it builds a pool and checks that a raft touching the pool wall and a raft with a loose
+(unmasted) sail are both refused. It then builds a two-masted ship, checks that both masts are
+recognised, takes the wheel and sails with a tailwind. It checks that the hull heaves on the waves, then
 steps away from the wheel and checks that the player stays standing on the moving deck. It then
 retakes the wheel, trims for a crosswind, turns, reefs, drops anchor and checks that the blocks
-are back. It saves screenshots of each step to
+are back. Along the way it photographs the rig from beside the ship with the sails square,
+trimmed and furled. It saves screenshots of each step to
 `build/run/clientGameTest/screenshots/`. CI runs it on every push (the `client-gametest` job) and
 uploads the screenshots as an artifact.
 
@@ -147,6 +158,7 @@ uploads the screenshots as an artifact.
 src/main/java/.../seaofsteves/
   block/        SailBlock, ShipWheelBlock (right-click → ShipAssembler)
   ship/         ShipAssembler   flood-fills from the wheel, checks the rules, lifts the blocks out
+                ShipRigging     finds masts (fence stacks) and their sail rectangles
                 ShipEntity      server-simulated ship: sails, trim, rudder, wind, waves, carrying riders, anchor
                 ShipHull        rotated collision boxes for the ship's blocks
                 ShipCollisions  adds hull boxes to entity collision (via mixin)
@@ -159,7 +171,7 @@ src/main/java/.../seaofsteves/
   network/      trim / anchor packets from the captain's client
   command/      /sos wind
 src/client/java/.../client/
-  ShipRenderer  draws every captured block, rotated with the ship's heading
+  ShipRenderer  draws the ship's blocks, turned, rocking, with sails swung to the trim angle
   SailingHud    the wind rose and gauges
   ShipControls  trim and anchor key binds
   mixin/        carries the local player with the deck they stand on
@@ -183,6 +195,10 @@ src/gametest/   the automated in-game test
 
 This is a prototype. These are the main gaps before it's a full mod:
 
+* Sails have no collision while sailing (they swing, so you can't stand on them), and the
+  physics counts every sail block the same whichever way it faces. Build sails across the ship
+  (facing the bow): they swing relative to how they were built, so a sail built along the keel
+  starts out side-on.
 * **You can't build on a sailing ship.** You can walk on it, but breaking or placing blocks
   affects the world, not the ship. Drop anchor to edit it.
 * Collision boxes can't rotate. At headings between the four compass directions, each block's
