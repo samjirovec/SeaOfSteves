@@ -16,9 +16,9 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
  * trim efficiency, wind and the ship's weight versus sail power.
  */
 public class SailingHud implements HudElement {
-	private static final int PANEL_W = 140;
-	private static final int PANEL_H = 196;
-	private static final int ROSE_R = 34;
+	private static final int PANEL_W = 166;
+	private static final int PANEL_H = 208;
+	private static final int ROSE_R = 30;
 
 	private static final int BG = 0x90101820;
 	private static final int FRAME = 0xFF8A6A3A;
@@ -43,13 +43,12 @@ public class SailingHud implements HudElement {
 		ShipStats stats = ship.getStats();
 
 		int x0 = g.guiWidth() - PANEL_W - 6;
-		int y0 = Math.max(4, g.guiHeight() - PANEL_H - 30);
+		int y0 = Math.max(2, g.guiHeight() - PANEL_H - 26);
 		g.fill(x0, y0, x0 + PANEL_W, y0 + PANEL_H, BG);
 		g.outline(x0, y0, PANEL_W, PANEL_H, FRAME);
-		g.centeredText(font, "Sea of Steves", x0 + PANEL_W / 2, y0 + 3, 0xFFFFD27F);
 
 		// --- Wind rose -------------------------------------------------------------------------
-		int cx = x0 + PANEL_W / 2, cy = y0 + 16 + ROSE_R + 4;
+		int cx = x0 + PANEL_W / 2, cy = y0 + ROSE_R + 12;
 		for (int a = 0; a < 360; a += 10) {
 			int size = a % 90 == 0 ? 2 : 1;
 			plot(g, cx, cy, a, ROSE_R, size, a % 90 == 0 ? TEXT : DIM);
@@ -82,60 +81,79 @@ public class SailingHud implements HudElement {
 		arrowHead(g, hx, hy, windRel, WIND);
 
 		// --- Gauges ----------------------------------------------------------------------------
-		int y = cy + ROSE_R + 8;
+		int y = cy + ROSE_R + 11;
 		int lx = x0 + 6;
+		int barX = lx + 52, valueX = lx + 118;
 		float speed = ship.getSpeed() * 20f;
-		g.text(font, String.format("Speed %.1f b/s  %.1f kn", speed, speed * 1.944f), lx, y, TEXT, true);
-		y += 11;
+		g.text(font, "Speed", lx, y, DIM, true);
+		g.text(font, String.format("%.1f b/s  %.1f kn", speed, speed * 1.944f), barX, y, TEXT, true);
+		y += 10;
 
 		g.text(font, "Canvas", lx, y, DIM, true);
-		bar(g, lx + 44, y + 1, 60, deploy, 0xFFE0E0E0);
-		g.text(font, Math.round(deploy * 100) + "%", lx + 108, y, TEXT, true);
-		y += 11;
+		bar(g, barX, y + 1, 62, deploy, 0xFFE0E0E0);
+		g.text(font, Math.round(deploy * 100) + "%", valueX, y, TEXT, true);
+		y += 10;
 
-		String side = Math.abs(trim) < 0.5f ? "centre" : trim > 0 ? "stbd" : "port";
-		g.text(font, String.format("Trim %.0f° %s", Math.abs(trim), side), lx, y, TEXT, true);
-		String idealSide = Math.abs(idealTrim) < 0.5f ? "" : idealTrim > 0 ? " stbd" : " port";
-		g.text(font, String.format("best %.0f°%s", Math.abs(idealTrim), idealSide), lx + 72, y, 0xFF77DD77, true);
-		y += 11;
+		g.text(font, "Trim", lx, y, DIM, true);
+		g.text(font, angle(trim), barX, y, TEXT, true);
+		y += 10;
+		g.text(font, "Ideal", lx, y, DIM, true);
+		g.text(font, angle(idealTrim), barX, y, 0xFF77DD77, true);
+		y += 10;
 
 		double quality = SailPhysics.trimQuality(windRel, trim);
 		g.text(font, "Trim eff.", lx, y, DIM, true);
-		bar(g, lx + 44, y + 1, 60, (float) quality, gradient((float) quality));
-		g.text(font, Math.round(quality * 100) + "%", lx + 108, y, TEXT, true);
-		y += 11;
+		bar(g, barX, y + 1, 62, (float) quality, gradient((float) quality));
+		g.text(font, Math.round(quality * 100) + "%", valueX, y, TEXT, true);
+		y += 10;
 
 		float wind = ship.getWindStrength();
 		g.text(font, "Wind", lx, y, DIM, true);
-		bar(g, lx + 44, y + 1, 60, Math.min(1f, wind / 1.5f), WIND);
-		g.text(font, windName(wind), lx + 108, y, TEXT, true);
-		y += 11;
+		bar(g, barX, y + 1, 62, Math.min(1f, wind / 1.5f), WIND);
+		g.text(font, windName(wind), valueX, y, TEXT, true);
+		y += 10;
 
 		double drive = SailPhysics.efficiency(windRel, trim) * wind * deploy;
-		g.text(font, String.format("Drive %.0f%%", Math.min(1.0, drive) * 100), lx, y, TEXT, true);
-		if (SailPhysics.bestEfficiency(windRel) < 0.05) g.text(font, "in irons!", lx + 72, y, 0xFFFF6655, true);
-		y += 11;
+		g.text(font, "Drive", lx, y, DIM, true);
+		bar(g, barX, y + 1, 62, (float) Math.min(1.0, drive), 0xFFFFD27F);
+		if (SailPhysics.bestEfficiency(windRel) < 0.05) {
+			g.text(font, "in irons", valueX, y, 0xFFFF6655, true);
+		} else {
+			g.text(font, Math.round(Math.min(1.0, drive) * 100) + "%", valueX, y, TEXT, true);
+		}
+		y += 10;
 
-		g.text(font, String.format("Weight %.0f  Sails %d", stats.mass(), stats.sailArea()), lx, y, TEXT, true);
-		y += 11;
+		g.text(font, "Weight", lx, y, DIM, true);
+		g.text(font, String.format("%.0f   sails %d", stats.mass(), stats.sailArea()), barX, y, TEXT, true);
+		y += 10;
 
 		double ptw = stats.powerToWeight();
 		String rating = ptw >= 0.1 ? "nimble" : ptw >= 0.04 ? "steady" : "sluggish";
 		int ratingColor = ptw >= 0.1 ? 0xFF77DD77 : ptw >= 0.04 ? 0xFFFFD27F : 0xFFFF6655;
-		g.text(font, String.format("Sail/weight %.2f", ptw), lx, y, TEXT, true);
-		g.text(font, rating, lx + 92, y, ratingColor, true);
-		y += 13;
+		g.text(font, "Sail/wt", lx, y, DIM, true);
+		g.text(font, String.format("%.2f", ptw), barX, y, TEXT, true);
+		g.text(font, rating, valueX - 8, y, ratingColor, true);
+		y += 12;
 
 		if (ship.isAground()) {
 			g.centeredText(font, "RUN AGROUND", cx, y, 0xFFFF5544);
+			g.centeredText(font, "turn away or drop anchor", cx, y + 10, DIM);
 		} else if (!ship.isCaptain(mc.player)) {
 			g.centeredText(font, "Passenger", cx, y, DIM);
 		} else {
 			g.centeredText(font, "W/S canvas  A/D helm", cx, y, DIM);
-			g.centeredText(font, ShipControls.TRIM_PORT.getTranslatedKeyMessage().getString() + "/"
-					+ ShipControls.TRIM_STARBOARD.getTranslatedKeyMessage().getString() + " trim  "
-					+ ShipControls.ANCHOR.getTranslatedKeyMessage().getString() + " anchor", cx, y + 10, DIM);
+			g.centeredText(font, key(ShipControls.TRIM_PORT) + "/" + key(ShipControls.TRIM_STARBOARD) + " trim  "
+					+ key(ShipControls.ANCHOR) + " anchor", cx, y + 10, DIM);
 		}
+	}
+
+	private static String key(net.minecraft.client.KeyMapping mapping) {
+		return mapping.getTranslatedKeyMessage().getString().replace(" Arrow", "");
+	}
+
+	private static String angle(float trim) {
+		if (Math.abs(trim) < 0.5f) return "0\u00b0";
+		return String.format("%.0f\u00b0 %s", Math.abs(trim), trim > 0 ? "stbd" : "port");
 	}
 
 	private static String windName(float strength) {
