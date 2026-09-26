@@ -8,14 +8,19 @@ Build any structure floating on water. If it doesn't touch land and it includes 
 Heavy ships need more sail. Wind changes from one area of the sea to the next, so you have to trim
 your sails to keep your speed up. A HUD shows the wind, your sails and your speed.
 
+The ship is solid while it sails. Walk around its deck, bump into its masts and ride along as it
+rolls over the waves. The captain stays at the wheel.
+
 > **Status: prototype (v0.1.0).** The core loop works and is covered by an automated in-game
 > test. See [Known limitations](#known-limitations) before building your flagship.
 
 | Built on the water | Underway with a tailwind |
 |---|---|
 | ![A ship built on water](docs/screenshots/ship_built.png) | ![Sailing HUD while underway](docs/screenshots/underway_hud.png) |
-| **Crosswind, sails trimmed to the ideal angle** | **Anchor dropped: the ship is blocks again** |
-| ![Crosswind trimmed](docs/screenshots/crosswind_trimmed.png) | ![Anchored](docs/screenshots/anchored.png) |
+| **Walking the deck while it sails** | **Crosswind, sails trimmed to the ideal angle** |
+| ![Walking the deck](docs/screenshots/walking_the_deck.png) | ![Crosswind trimmed](docs/screenshots/crosswind_trimmed.png) |
+| **Anchor dropped: the ship is blocks again** | |
+| ![Anchored](docs/screenshots/anchored.png) | |
 
 *These screenshots were taken automatically by the in-game test on CI. The chat text comes from
 the commands the test uses to build the scene.*
@@ -31,9 +36,14 @@ the commands the test uses to build the scene.*
 | **Local wind** | Wind direction and strength vary across the world in wide air currents (a few hundred blocks across), with smaller eddies and gusts on top. The pattern drifts slowly over time. Rain strengthens the wind and thunderstorms strengthen it more. |
 | **Sail trim** | Sails push along the direction they face. The keel stops the ship sliding sideways. You can't sail straight into the wind ("in irons"), and in a crosswind you need to angle the sails. The best trim is half the angle of the wind. |
 | **Sailing HUD** | A wind rose that keeps your bow pointing up, showing the wind arrow, your sail (white) and the ideal sail angle (green). Below it are gauges for speed (blocks/s and knots), canvas, trim, ideal trim, trim efficiency, wind, drive, weight, sail count and sail-to-weight rating. |
+| **Walkable decks** | A sailing ship's blocks are solid. Players and mobs can stand on the deck, walk around, and bump into masts and railings, and the ship carries them along and turns them with it. A moving hull shoves swimmers and mobs aside. |
+| **Waves** | The ship rises and falls on a swell driven by the local wind, and rocks bow-to-stern and side-to-side depending on the waves under it. Calm seas are gentle and gales are choppy. Under sail it also heels away from the wind. Heavier ships move more slowly and settle more gradually. |
 | **Drop anchor** | Turns the ship back into ordinary blocks, snapped to the nearest 90° rotation, with everyone standing on deck. |
 
-## Controls (while at the wheel)
+## Controls
+
+**Right-click the wheel** of a sailing ship to take the helm, and press `Shift` to step away
+from it onto the deck. At the helm:
 
 | Key | Action |
 |---|---|
@@ -41,8 +51,7 @@ the commands the test uses to build the scene.*
 | `A` / `D` | Steer to port / starboard (you turn faster when you're moving) |
 | `←` / `→` | Trim the sails to port / starboard |
 | `R` | Drop anchor: turn the ship back into blocks (you must be nearly stopped) |
-| `Shift` | Leave the ship (you'll end up in the water, so drop anchor first) |
-| Right-click the ship | Board as a passenger (up to 8 people) |
+| `Shift` | Step away from the wheel. You stand on the deck and can walk around while the ship keeps sailing. |
 
 You can rebind the arrow keys and `R` under **Options → Controls → Key Binds → Sea of Steves**.
 
@@ -116,15 +125,19 @@ In Creative mode, both blocks are in the **Functional Blocks** tab.
    practise trimming.
 8. Try the weight mechanic: anchor, add a layer of stone or iron blocks, sail again, and compare
    *Sail/wt* and top speed. Then add more sails and compare again.
-9. Press `S` to reef the sails and slow down, then press `R` to **drop anchor**. The ship turns
+9. Let out some sail, press `Shift` to step away from the wheel, and walk around the deck while
+   it sails and rocks on the waves. Right-click the wheel to take the helm again.
+10. Press `S` to reef the sails and slow down, then press `R` to **drop anchor**. The ship turns
    back into blocks and you're standing on the deck. You can edit it and sail again.
 
 ### Automated in-game test
 
 `./gradlew runClientGameTest` launches a real Minecraft 26.3 client and plays through the core
 loop: it builds a pool, checks that a raft touching the pool wall is refused, builds a ship,
-takes the wheel, sails with a tailwind, trims for a crosswind, turns, reefs, drops anchor and
-checks that the blocks are back. It saves screenshots of each step to
+takes the wheel and sails with a tailwind. It checks that the hull heaves on the waves, then
+steps away from the wheel and checks that the player stays standing on the moving deck. It then
+retakes the wheel, trims for a crosswind, turns, reefs, drops anchor and checks that the blocks
+are back. It saves screenshots of each step to
 `build/run/clientGameTest/screenshots/`. CI runs it on every push (the `client-gametest` job) and
 uploads the screenshots as an artifact.
 
@@ -134,17 +147,22 @@ uploads the screenshots as an artifact.
 src/main/java/.../seaofsteves/
   block/        SailBlock, ShipWheelBlock (right-click → ShipAssembler)
   ship/         ShipAssembler   flood-fills from the wheel, checks the rules, lifts the blocks out
-                ShipEntity      server-simulated ship: sails, trim, rudder, wind, collision, anchor
+                ShipEntity      server-simulated ship: sails, trim, rudder, wind, waves, carrying riders, anchor
+                ShipHull        rotated collision boxes for the ship's blocks
+                ShipCollisions  adds hull boxes to entity collision (via mixin)
                 ShipStructure   the captured blocks (saved to disk and synced to clients)
                 BlockWeights    rough weight of each block
   physics/      SailPhysics     sail efficiency, drag and turning (pure Java, unit tested)
                 WindField       seeded, localized wind currents
+                WaveField       wind-driven swell used for heave, pitch and roll
+  mixin/        Entity collision hook; no "flying" kick for players standing on a deck
   network/      trim / anchor packets from the captain's client
   command/      /sos wind
 src/client/java/.../client/
   ShipRenderer  draws every captured block, rotated with the ship's heading
   SailingHud    the wind rose and gauges
   ShipControls  trim and anchor key binds
+  mixin/        carries the local player with the deck they stand on
 src/gametest/   the automated in-game test
 ```
 
@@ -153,20 +171,30 @@ src/gametest/   the automated in-game test
 * Sailing model: `efficiency = max(0, cos(wind − trim)) × cos(trim)` and
   `acceleration = (0.12 × sails × canvas × wind × efficiency − drag) / weight`. Drag grows with
   weight and with speed squared.
+* Walkable decks: every entity movement asks the level for nearby collision shapes, and a mixin
+  adds the ship's block boxes, rotated with its heading. Players move themselves on their own
+  client, so the client carries the local player with the deck and the server carries mobs and
+  items. The server trusts the player's position on deck rather than re-checking it against the
+  hull, because its view of the ship is a few ticks ahead of the client's.
+* Waves: the hull samples wave height under its bow, stern and sides. Heave (up and down) moves
+  the real ship, collision boxes included. Pitch and roll are applied when the ship is drawn.
 
 ## Known limitations
 
 This is a prototype. These are the main gaps before it's a full mod:
 
-* **You ride the ship; you can't walk on it.** Everyone on board has a fixed spot on deck, and
-  you can't break or place blocks on a moving ship. Drop anchor to edit it.
+* **You can't build on a sailing ship.** You can walk on it, but breaking or placing blocks
+  affects the world, not the ship. Drop anchor to edit it.
+* Collision boxes can't rotate. At headings between the four compass directions, each block's
+  collision box grows to cover its rotated footprint (up to ~0.2 blocks wider at 45°). Pitch
+  and roll are visual only (at most 4°), so the walkable deck stays level.
 * **No blocks with inventories yet.** Chests, furnaces, barrels and other block entities block
   assembly, so their contents can't be lost.
-* The ship stays at a fixed height: no waves, sinking or waterfalls. Collision only checks the
-  ship's own blocks against solid world blocks, and entities don't collide with the hull.
+* No sinking, capsizing or waterfalls, and ships don't collide with each other.
+* Minecraft's water stays flat, so the waves only move ships, not the water surface.
 * Very large ships (thousands of blocks) are drawn block by block every frame, which is slow.
-* It has only been tested in single-player so far. It's designed to be server-authoritative
-  for multiplayer, but that hasn't been exercised yet.
+* It has only been tested in single-player so far. Walking on the deck is designed to work in
+  multiplayer, including with lag, but that hasn't been tested yet.
 * The textures are placeholder art.
 
 ## License
