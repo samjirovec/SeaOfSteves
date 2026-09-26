@@ -109,7 +109,19 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 			// --- 6. Step away from the wheel and walk the deck while under way. ------------------------
 			context.getInput().holdKeyFor(options -> options.keyShift, 2);
 			context.waitFor(client -> client.player.getVehicle() == null, 60);
-			context.waitTicks(10);
+			for (int i = 0; i < 12; i++) {
+				context.runOnClient(client -> {
+					ShipEntity ship = client.level.getEntitiesOfClass(ShipEntity.class, client.player.getBoundingBox().inflate(20)).getFirst();
+					var below = client.player.getBoundingBox().expandTowards(0, -1, 0);
+					int shapes = io.github.samjirovec.seaofsteves.ship.ShipCollisions.withShipHulls(client.level, client.player, below, java.util.List.of()).size();
+					System.out.printf("[deck-debug] t=%d offset=(%.2f, %.3f, %.2f) onGround=%s shapesBelow=%d hullBoxes=%d ships=%d deltaY=%.3f%n",
+							client.level.getGameTime(), client.player.getX() - ship.getX(), client.player.getY() - ship.getY(), client.player.getZ() - ship.getZ(),
+							client.player.onGround(), shapes, ship.getHullBoxes().size(),
+							io.github.samjirovec.seaofsteves.ship.ShipCollisions.shipsIn(client.level).size(), client.player.getDeltaMovement().y);
+				});
+				context.waitTick();
+			}
+			context.takeScreenshot("seaofsteves_05a_just_stepped_off");
 			context.getInput().holdKeyFor(options -> options.keyRight, 6); // stroll toward the starboard rail
 			double walkStartZ = shipZ(server);
 			context.waitTicks(30);
