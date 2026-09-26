@@ -12,7 +12,6 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContex
 import net.minecraft.client.CameraType;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import net.minecraft.core.BlockPos;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.AABB;
 
 /**
@@ -50,7 +49,7 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 			context.getInput().pressKey(options -> options.keyUse);
 			context.waitTicks(10);
 			context.takeScreenshot("seaofsteves_01_refused_touching_land");
-			if (countShips(singleplayer.getConnection().getServerLevel(), server, cx, y, cz) != 0) {
+			if (countShips(server, cx, y, cz) != 0) {
 				throw new AssertionError("A structure touching land must not become a ship");
 			}
 
@@ -114,7 +113,7 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 			context.getInput().pressKey(ShipControls.ANCHOR);
 			context.waitFor(client -> client.player.getVehicle() == null, 100);
 			context.waitTicks(5);
-			if (countShips(singleplayer.getConnection().getServerLevel(), server, cx, y, cz) != 0) {
+			if (countShips(server, cx, y, cz) != 0) {
 				throw new AssertionError("Dropping anchor should remove the ship entity");
 			}
 			int wheels = server.computeOnServer(s -> {
@@ -148,7 +147,7 @@ public class SeaOfStevesClientGameTest implements FabricClientGameTest {
 		return server.computeOnServer(s -> firstShip(s).getZ());
 	}
 
-	private static int countShips(ServerLevel level, TestServerContext server, int cx, int y, int cz) {
+	private static int countShips(TestServerContext server, int cx, int y, int cz) {
 		return server.computeOnServer(s -> {
 			List<ShipEntity> ships = s.overworld().getEntitiesOfClass(ShipEntity.class, new AABB(cx - 40, y - 5, cz - 40, cx + 40, y + 20, cz + 40));
 			return ships.size();
