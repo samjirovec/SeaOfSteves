@@ -32,7 +32,7 @@ public class SailingHud implements HudElement {
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor g, DeltaTracker deltaTracker) {
 		Minecraft mc = Minecraft.getInstance();
-		if (mc.player == null || mc.options.hideGui || !(mc.player.getVehicle() instanceof ShipEntity ship)) return;
+		if (mc.player == null || !(mc.player.getVehicle() instanceof ShipEntity ship)) return;
 
 		Font font = mc.font;
 		float partial = deltaTracker.getGameTimeDeltaPartialTick(false);

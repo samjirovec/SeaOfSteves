@@ -1,7 +1,7 @@
 package io.github.samjirovec.seaofsteves.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.math.Axis;
+import org.joml.Matrix4f;
 import io.github.samjirovec.seaofsteves.ship.ShipEntity;
 import io.github.samjirovec.seaofsteves.ship.ShipStructure;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -58,7 +58,7 @@ public class ShipRenderer extends EntityRenderer<ShipEntity, ShipRenderState> {
 	public void submit(ShipRenderState state, PoseStack poseStack, SubmitNodeCollector collector, CameraRenderState camera) {
 		poseStack.pushPose();
 		poseStack.translate(0, state.bob, 0);
-		poseStack.mulPose(Axis.YP.rotationDegrees(-state.relativeYaw));
+		poseStack.mulPose(new Matrix4f().rotationY((float) Math.toRadians(-state.relativeYaw)));
 		for (int i = 0; i < state.count; i++) {
 			BlockPos rel = state.offsets.get(i);
 			poseStack.pushPose();
