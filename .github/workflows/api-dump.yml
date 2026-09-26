@@ -1,0 +1,14 @@
+# Temporary dev aid: prints Minecraft 26.3 signatures needed while writing mixins.
+name: api-dump
+on: push
+jobs:
+  dump:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'microsoft'
+      - run: chmod +x ./gradlew && ./gradlew compileJava -q
+      - run: bash .github/api-dump.sh

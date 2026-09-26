@@ -1,0 +1,12 @@
+methods:net.minecraft.world.entity.Entity#collide,collectAllColliders,collideBoundingBox,collectColliders
+grep:net.minecraft.world.entity.Entity#Authoritative|LocalInstance|onRemoval|setRemoved|onAddedToLevel|onRemovedFromLevel|getBoundingBoxForCulling|isPickable|canBeHitByProjectile|getPickRadius
+net.minecraft.world.level.EntityGetter
+net.minecraft.world.level.CollisionGetter
+grep:net.minecraft.world.level.Level#EntityCollisions|getEntities\(
+grep:net.minecraft.server.network.ServerGamePacketListenerImpl#aboveGround|Floating|noBlocksAround|FlightAllowed|isPlayerCollidingWithAnythingNew|handleMovePlayer
+methods:net.minecraft.server.network.ServerGamePacketListenerImpl#noBlocksAround
+grep:net.minecraft.world.level.EmptyBlockGetter#INSTANCE
+grep:net.minecraft.world.phys.shapes.VoxelShape#toAabbs|forAllBoxes|isEmpty
+grep:net.minecraft.world.phys.shapes.Shapes#create|empty
+grep:net.minecraft.world.entity.player.Player#isLocalPlayer|isClientAuthoritative
+grep:net.minecraft.client.renderer.entity.EntityRenderer#getBoundingBoxForCulling
